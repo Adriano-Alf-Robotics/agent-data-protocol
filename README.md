@@ -24,10 +24,11 @@ di dati.
 6. [Integrazione con agenti AI](#integrazione-con-agenti-ai)
 7. [Riduzione token misurata](#riduzione-token-misurata)
 8. [Esempi a confronto](#esempi-a-confronto)
-9. [Struttura del progetto](#struttura-del-progetto)
-10. [Sviluppo e test](#sviluppo-e-test)
-11. [Roadmap](#roadmap)
-12. [Licenza](#licenza)
+9. [Immagini](#immagini)
+10. [Struttura del progetto](#struttura-del-progetto)
+11. [Sviluppo e test](#sviluppo-e-test)
+12. [Roadmap](#roadmap)
+13. [Licenza](#licenza)
 
 ---
 
@@ -331,6 +332,108 @@ CSV "vince" sui token solo perché annega le sub-strutture in stringhe
 non parsabili: round-trip semantico fallito. ADP conserva la struttura
 nativa.
 
+## Immagini
+
+Le immagini raster sono un caso speciale. Una volta convertite in
+base64 per il canale testuale, il loro costo in token è dominato dal
+base64 stesso, non dalla sintassi del wrapper. Misura su PNG
+sintetico 128×128 RGBA:
+
+| Formato | Token cl100k | Note |
+|---|---:|---|
+| JSON con `"data_b64":"..."` | 54.462 | base64 + sintassi JSON |
+| ADP con `data=b!...` | 54.457 | base64 + sintassi ADP |
+| RAW base64 puro | 54.425 | nessun wrapper, nessun metadato |
+
+La differenza fra i tre è inferiore allo 0,1%. Sui binari inline il
+wrapper non conta — è il base64 a dominare il costo.
+
+ADP risolve il problema in due direzioni complementari: trattando le
+immagini come **riferimenti** (ADP-DB) oppure comprimendole con
+**strategie lossy** mirate al consumo LLM (modulo `adp.image`).
+
+### Strategie lossy inline (modulo `adp.image`)
+
+Misure su immagine sorgente PNG 256×256 RGB (gradiente + forme),
+baseline 2.842 token cl100k per la versione lossless:
+
+| Strategia | Token | Δ vs PNG | Lossless | Caso ideale |
+|---|---:|---:|:---:|---|
+| `passthrough` (PNG inline) | 2.842 | — | ✓ | qualità massima necessaria |
+| `thumbnail_webp` q30 256×256 | 1.438 | **−49%** | ✗ | full-resolution lossy |
+| `thumbnail_jpeg` size=128 q20 | 1.353 | **−52%** | ✗ | qualità decente |
+| `thumbnail_jpeg` size=64 q50 | 934 | **−67%** | ✗ | analisi LLM generica |
+| `thumbnail_jpeg` size=32 q30 | 524 | **−82%** | ✗ | essenza visiva |
+| `hybrid` (thumb 24×24 + pHash + caption) | 550 | **−81%** | ✗ | best balance |
+| `bitmap_8x8` (8×8 RGB raw) | 182 | **−94%** | ✗ | colori dominanti |
+| `caption` (descrizione testuale) | 27 | **−99%** | ✗ | vision offline disponibile |
+| `perceptual_hash` (64-bit) | 11 | **−99,6%** | ✗ | solo similarity check |
+| ADP-DB ref `^id` (dopo bootstrap) | 5 | **−99,8%** | ✓ | asset ricorrente |
+
+### API
+
+```python
+import adp
+from adp.image import compress_for_llm, decompress, hamming_distance
+
+# Strategia raccomandata generale: thumbnail 64×64 JPEG q50
+payload = compress_for_llm(img_bytes, strategy="thumbnail_jpeg", size=64, quality=50)
+msg = adp.encode({"task": "describe", "image": payload})
+# ~930 token vs ~2840 PNG inline
+
+# Hybrid: thumbnail visibile + hash + caption + metadati
+payload = compress_for_llm(img_bytes, strategy="hybrid",
+                            thumb_size=24, thumb_quality=30,
+                            caption="red square on blue gradient")
+# ~550 token, contiene tutto ciò che serve per analisi + similarity
+
+# Perceptual hash: solo similarity check, nessuna decompressione
+p1 = compress_for_llm(img_a, strategy="perceptual_hash")
+p2 = compress_for_llm(img_b, strategy="perceptual_hash")
+distance = hamming_distance(p1, p2)   # 0 = identici, basso = simili
+```
+
+Sette strategie disponibili: `passthrough`, `thumbnail_jpeg`,
+`thumbnail_webp`, `perceptual_hash`, `bitmap_8x8`, `caption`,
+`hybrid`. Tutte producono dict compatibili con `adp.encode()`.
+
+### Strategia ADP-DB per asset ricorrenti
+
+Quando gli stessi asset (avatar, icone, screenshot di riferimento)
+viaggiano più volte tra gli stessi agenti, ADP-DB li promuove a
+identificatori brevi nel database condiviso. Costo bootstrap una
+sola volta, follow-up praticamente gratuiti.
+
+```python
+from adp import ADPStore
+
+store = ADPStore(path="agents_shared.json")
+with open("avatar_42.png", "rb") as f:
+    img_id = store.put(f.read().decode("latin1"))
+store.save()
+
+# Messaggi successivi: ~5 token al posto di ~14.000
+msg = adp.encode({"task": "lookup_user", "avatar_ref": img_id})
+```
+
+Su un workload di cento chiamate che riutilizzano tre immagini, il
+risparmio totale misurato è di circa **16 milioni di token** rispetto
+all'invio inline ripetuto.
+
+### Decision tree rapido
+
+| Necessità | Strategia consigliata |
+|---|---|
+| Identificare oggetti specifici in alta risoluzione | `passthrough` o `thumbnail_jpeg` size=256 |
+| LLM deve descrivere o classificare l'immagine | `thumbnail_jpeg` size=64, quality=50 |
+| Solo similarity check tra due immagini | `perceptual_hash` |
+| Asset ricorrenti (icone, avatar, screenshot fissi) | `ADPStore` + riferimenti `^id` |
+| Vision-LLM offline disponibile per caption | strategia `caption` |
+| Best balance generale (analisi + similarity) | `hybrid` |
+
+Dipendenze opzionali: `pillow` per resize/JPEG/WEBP, `imagehash`
+per pHash. Installa con `uv sync --extra bench`.
+
 ## Struttura del progetto
 
 ```
@@ -341,19 +444,29 @@ GoalLanguageAgents/
 │   ├── serializer.py      Python → ADP
 │   ├── converters.py      JSON / Markdown (con _adp_bytes tag)
 │   ├── prompt.py          system prompt + 8 few-shot pairs
+│   ├── lut.py             LUT condivisa per chiavi (DEFAULT_AGENT_LUT)
+│   ├── tpd.py             Token-aware Phrase Dictionary + learn_lut
+│   ├── db.py              ADPStore: DB persistente di blob testuali
+│   ├── image.py           7 strategie compressione immagini per LLM
 │   └── cli.py             CLI Click
 ├── tests/
-│   ├── test_roundtrip.py       round-trip su 23 payload
-│   ├── test_converters.py      JSON e Markdown
-│   └── test_v02_features.py    bytes, bare ampliate, nested tables, error cases
+│   ├── test_roundtrip.py        round-trip su 23 payload
+│   ├── test_converters.py       JSON e Markdown
+│   ├── test_v02_features.py     bytes, bare ampliate, nested tables
+│   ├── test_lut.py              LUT key shortening
+│   ├── test_tpd_db.py           TPD + ADPStore
+│   └── test_image.py            7 strategie immagine
 ├── benchmarks/
-│   ├── payloads.py        15 payload (6 famiglie × IT/EN + 3 v0.2-specifici)
-│   ├── encoders.py        adattatori JSON/YAML/TOML/MsgPack/XML/CSV
-│   ├── compare_formats.py runner che genera results.md
-│   └── results.md         report generato (~63 KB)
-├── docs/superpowers/specs/
-│   └── 2026-05-22-adp-design.md   design document v0.2
-├── examples/quickstart.py
+│   ├── payloads.py         18 payload (6 famiglie × IT/EN/ZH + binary)
+│   ├── encoders.py         adattatori JSON/YAML/TOML/MsgPack/XML/CSV/RAW
+│   ├── compare_formats.py  runner che genera results.md
+│   └── results.md          report generato (~110 KB)
+├── docs/
+│   ├── superpowers/specs/2026-05-22-adp-design.md   design doc v0.2
+│   └── ADP-relazione-completa.md                     relazione tecnica
+├── examples/
+│   ├── quickstart.py             demo base
+│   └── two_agents_db.py          demo LUT/DB condivisa
 ├── pyproject.toml
 └── README.md
 ```
