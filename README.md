@@ -25,10 +25,11 @@ di dati.
 7. [Riduzione token misurata](#riduzione-token-misurata)
 8. [Esempi a confronto](#esempi-a-confronto)
 9. [Immagini](#immagini)
-10. [Struttura del progetto](#struttura-del-progetto)
-11. [Sviluppo e test](#sviluppo-e-test)
-12. [Roadmap](#roadmap)
-13. [Licenza](#licenza)
+10. [Integrità — sign / verify](#integrità--sign--verify)
+11. [Struttura del progetto](#struttura-del-progetto)
+12. [Sviluppo e test](#sviluppo-e-test)
+13. [Roadmap](#roadmap)
+14. [Licenza](#licenza)
 
 ---
 
@@ -434,6 +435,113 @@ all'invio inline ripetuto.
 Dipendenze opzionali: `pillow` per resize/JPEG/WEBP, `imagehash`
 per pHash. Installa con `uv sync --extra bench`.
 
+## Integrità — sign / verify
+
+ADP di base non protegge un messaggio in transito: garantisce solo
+round-trip semantico (`decode(encode(x)) == x`). Per detectare
+corruzioni accidentali o modifiche intenzionali (incluse alterazioni
+prodotte da un LLM intermediario), la libreria offre il modulo
+opzionale `adp.integrity`, che appende un trailer della forma
+`;_chk=<algo>:<hex>` al messaggio.
+
+### Tre algoritmi disponibili
+
+| Algoritmo | Hex | Overhead token | Forza | Caso ideale |
+|---|---:|---:|---|---|
+| `crc32` | 8 char | +~12 token | detection corruzione casuale | canale già autenticato (TLS), serve solo robustezza |
+| `sha256` | 64 char | +~42 token | detection crittografica | LLM in mezzo (può alterare il testo) |
+| `hmac` | 64 char | +~42 token | detection + autenticità mittente | flotte multi-agente con chiave condivisa |
+
+L'overhead è **costante** (non scala con la lunghezza del payload),
+quindi è proporzionalmente più caro sui messaggi piccoli e
+trascurabile su quelli grandi.
+
+### API Python
+
+```python
+import adp
+
+msg = adp.encode({"task": "transfer", "amount": 100.0, "to": "alice"})
+
+# CRC32 — economico
+signed = adp.integrity.sign(msg, algo="crc32")
+# task=transfer;amount=100.0;to=alice;_chk=crc32:6b4d2817
+
+# SHA-256 — robusto contro modifiche dell'LLM
+signed = adp.integrity.sign(msg, algo="sha256")
+
+# HMAC — anche autenticità
+signed = adp.integrity.sign(msg, algo="hmac", key=b"shared-secret")
+
+# Verifica: ritorna messaggio pulito, oppure solleva IntegrityError
+clean = adp.integrity.verify(signed, key=b"shared-secret")
+data = adp.decode(clean)
+```
+
+### Uso da CLI
+
+```bash
+# Firma da pipeline
+echo '{"task":"transfer","amount":100.0,"to":"alice"}' \
+  | uv run adp encode \
+  | uv run adp sign --algo sha256
+# task=transfer;amount=100.0;to=alice;_chk=sha256:8cb2afe81e13b004...
+
+# Round-trip integro
+echo '{"x":42}' | uv run adp encode | uv run adp sign | uv run adp verify
+# x=42  (exit 0)
+
+# Tampering rilevato (exit code 1)
+echo '{"x":42}' | uv run adp encode | uv run adp sign \
+  | sed 's/42/99/' | uv run adp verify
+# INTEGRITY FAILURE: sha256 mismatch...   (exit 1)
+
+# HMAC con chiave da file (preferito per i secrets)
+echo 'shared-secret' > /tmp/k.key
+echo '{"x":1}' | uv run adp encode | uv run adp sign --algo hmac --key-file /tmp/k.key
+echo '<msg>' | uv run adp verify --key-file /tmp/k.key
+```
+
+Opzioni `adp sign`:
+- `--algo crc32|sha256|hmac` (default `sha256`)
+- `--key STRING` chiave HMAC inline (visibile nella shell history)
+- `--key-file PATH` chiave HMAC da file (consigliato)
+
+Opzioni `adp verify`:
+- `--key` / `--key-file` per HMAC
+- `--strict/--no-strict` se richiedere o no la presenza del trailer
+- `--strip-only` rimuove il trailer senza verificarlo (sconsigliato)
+
+### Caso d'uso più rilevante: detection alterazioni LLM
+
+Quando un agente comunica attraverso un LLM intermediario, il modello
+**può modificare silenziosamente** il messaggio: cambiare whitespace,
+alterare un escape, aggiungere o togliere un carattere. Senza
+checksum il destinatario non se ne accorge, e i dati corrotti
+proseguono nella pipeline.
+
+```
+Agente A → encode → sign(sha256) → LLM B (forward) → verify → Agente C
+                                       │
+                                       └─ se modifica anche 1 byte
+                                          → IntegrityError lato C
+```
+
+In ambienti dove l'LLM è solo un router/orchestrator del messaggio,
+firmare con SHA-256 è il modo standard per garantire che il payload
+arrivi intatto. Per autenticità del mittente (non solo integrità)
+usare HMAC con chiave condivisa fuori-canale.
+
+### Quando NON serve
+
+| Canale | Integrità built-in? | Serve `adp.integrity`? |
+|---|---|---|
+| HTTPS / gRPC / TLS | sì (TLS) | no (ridondante) |
+| File su disco condiviso | no | sì (CRC32 basta) |
+| Coda di messaggi (Redis, RabbitMQ) | no | sì (CRC32 o SHA-256) |
+| **LLM in mezzo** (agent → LLM → agent) | **NO** | **sì, SHA-256 o HMAC** |
+| Storage long-term (audit log) | no | sì (SHA-256 per bit-rot) |
+
 ## Struttura del progetto
 
 ```
@@ -448,14 +556,16 @@ GoalLanguageAgents/
 │   ├── tpd.py             Token-aware Phrase Dictionary + learn_lut
 │   ├── db.py              ADPStore: DB persistente di blob testuali
 │   ├── image.py           7 strategie compressione immagini per LLM
-│   └── cli.py             CLI Click
+│   ├── integrity.py       sign / verify (CRC32, SHA-256, HMAC)
+│   └── cli.py             CLI Click (encode/decode/sign/verify/bench/...)
 ├── tests/
 │   ├── test_roundtrip.py        round-trip su 23 payload
 │   ├── test_converters.py       JSON e Markdown
 │   ├── test_v02_features.py     bytes, bare ampliate, nested tables
 │   ├── test_lut.py              LUT key shortening
 │   ├── test_tpd_db.py           TPD + ADPStore
-│   └── test_image.py            7 strategie immagine
+│   ├── test_image.py            7 strategie immagine
+│   └── test_integrity.py        sign / verify / tampering detection
 ├── benchmarks/
 │   ├── payloads.py         18 payload (6 famiglie × IT/EN/ZH + binary)
 │   ├── encoders.py         adattatori JSON/YAML/TOML/MsgPack/XML/CSV/RAW

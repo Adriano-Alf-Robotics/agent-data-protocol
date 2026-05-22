@@ -5,6 +5,8 @@ Usage:
     adp decode      ADP stdin -> JSON stdout
     adp to-md       ADP stdin -> Markdown stdout
     adp validate    ADP stdin -> exit 0 if valid, 1 if not
+    adp sign        ADP stdin -> ADP+integrity stdout
+    adp verify      ADP+integrity stdin -> ADP stdout (exit 1 if tampered)
     adp bench       JSON stdin -> token comparison table
     adp prompt      Print the ADP system prompt
 """
@@ -20,6 +22,7 @@ from adp.parser import decode, ADPParseError
 from adp.serializer import encode
 from adp.converters import to_json, from_json, to_markdown
 from adp.prompt import system_prompt, few_shot_block
+from adp.integrity import sign as integrity_sign, verify as integrity_verify, is_signed, strip as integrity_strip, IntegrityError
 
 
 @click.group()
@@ -71,6 +74,62 @@ def cmd_validate() -> None:
     except ADPParseError as e:
         click.echo(f"INVALID: {e}", err=True)
         sys.exit(1)
+
+
+def _load_key(key_arg: str | None, key_file: str | None) -> bytes | None:
+    if key_file:
+        from pathlib import Path
+        return Path(key_file).read_bytes().strip()
+    if key_arg:
+        return key_arg.encode("utf-8")
+    return None
+
+
+@main.command("sign")
+@click.option("--algo", type=click.Choice(["crc32", "sha256", "hmac"]),
+              default="sha256", help="Integrity algorithm")
+@click.option("--key", default=None,
+              help="HMAC key as string (required for --algo hmac)")
+@click.option("--key-file", default=None, type=click.Path(exists=True),
+              help="Read HMAC key from a file (preferred for secrets)")
+def cmd_sign(algo: str, key: str | None, key_file: str | None) -> None:
+    """Append an integrity trailer to an ADP document from stdin."""
+    raw = sys.stdin.read().rstrip("\n")
+    k = _load_key(key, key_file)
+    if algo == "hmac" and not k:
+        raise click.ClickException("hmac requires --key or --key-file")
+    try:
+        signed = integrity_sign(raw, algo=algo, key=k)
+    except ValueError as e:
+        raise click.ClickException(str(e))
+    sys.stdout.write(signed)
+
+
+@main.command("verify")
+@click.option("--key", default=None, help="HMAC key as string")
+@click.option("--key-file", default=None, type=click.Path(exists=True),
+              help="Read HMAC key from a file")
+@click.option("--strict/--no-strict", default=True,
+              help="Fail if no integrity trailer is present (default: strict)")
+@click.option("--strip-only", is_flag=True,
+              help="Strip the trailer without verifying (NOT recommended)")
+def cmd_verify(key: str | None, key_file: str | None,
+               strict: bool, strip_only: bool) -> None:
+    """Verify integrity trailer and emit the clean ADP document on stdout.
+
+    Exit code 0 if the message is intact, 1 if tampered or missing trailer.
+    """
+    raw = sys.stdin.read().rstrip("\n")
+    if strip_only:
+        sys.stdout.write(integrity_strip(raw))
+        return
+    k = _load_key(key, key_file)
+    try:
+        clean = integrity_verify(raw, key=k, strict=strict)
+    except IntegrityError as e:
+        click.echo(f"INTEGRITY FAILURE: {e}", err=True)
+        sys.exit(1)
+    sys.stdout.write(clean)
 
 
 @main.command("bench")
