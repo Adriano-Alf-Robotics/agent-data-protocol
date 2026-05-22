@@ -1,0 +1,8 @@
+{
+  "user": {"id": 42, "name": "Adriano", "active": true},
+  "metrics": [
+    {"id": 1, "value": 42.0, "unit": "kg"},
+    {"id": 2, "value": 3.14, "unit": "m"}
+  ],
+  "report": "Riga 1\nRiga 2 con \"virgolette\""
+}
