@@ -17,6 +17,14 @@ tipico — mappe annidate, liste, tabelle con cells annidate, testi
 multilinea, primitive tipizzate, **bytes** — senza mai introdurre perdita
 di dati.
 
+**Quanto risparmia (vs JSON-min, tokenizer cl100k_base):**
+
+| Payload tipico | JSON-min (tok) | ADP (tok) | Δ |
+|---|---:|---:|---:|
+| Tabella omogenea (it) | 333 | 164 | **+50,8%** |
+| Lista contatti con URL/email | 145 | 94 | **+35,2%** |
+| Tabelle con cells annidate | 100 | 75 | **+25,0%** |
+
 ## Indice
 
 1. [Perché ADP](#perché-adp)
