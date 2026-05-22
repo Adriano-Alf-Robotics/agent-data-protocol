@@ -288,6 +288,45 @@ Sul payload `binary_en` (immagine 256 byte) i risultati sono:
 ADP è uno dei pochi formati testuali che gestisce bytes lossless senza
 adattatori custom, ed è il più economico per token.
 
+### Nota importante: si paga ciò che il modello EMETTE, non ciò che vede l'utente
+
+I provider LLM (Anthropic, OpenAI, ...) addebitano gli **output token in
+base a ciò che il modello emette**, non a ciò che la UI mostra. La
+differenza non è banale:
+
+| Cosa emesso dal modello | Pagato | Visto dall'utente |
+|---|:---:|:---:|
+| Testo finale della risposta | ✓ | ✓ |
+| `thinking` / `reasoning` block (Claude 4, o1, o3) | **✓** | ✗ nascosto |
+| Argomenti JSON dei tool call | **✓** | parziale |
+| Caratteri Markdown raw (`**`, `##`, `|`) | ✓ | ✗ (renderizzati) |
+| Token emessi prima di stop sequence | ✓ | ✗ |
+
+Questa asimmetria è una **buona notizia per ADP**: chiedere al modello
+di emettere ADP (denso, pochi token) e poi convertirlo lato client in
+Markdown o JSON pretty produce la stessa esperienza utente a un costo
+significativamente inferiore.
+
+```
+Modello emette ADP  ──── paghi pochi token  (output_tokens API)
+        │
+        └── client converte con adp.to_markdown()  ── zero costo
+                                       │
+                                       └── utente vede output ricco
+```
+
+Verifica nel response API:
+
+```python
+resp = client.messages.create(model="claude-opus-4-7", ...)
+print("output_tokens:", resp.usage.output_tokens)
+# include thinking + tool_use + text — non solo ciò che renderizzi
+```
+
+Su modelli con extended thinking, il reasoning interno può essere il
+50-90% degli output token. Se il reasoning è verboso (es. JSON
+intermedio) lo paghi tutto, anche se non viene mostrato.
+
 ## Esempi a confronto
 
 Stesso payload nested-table (4 utenti con ruoli e permessi):
