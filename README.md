@@ -1,5 +1,8 @@
 # ADP — Adriano Dal Pastro format
 
+![License: MIT](https://img.shields.io/badge/license-MIT-blue)
+![Python ≥3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
+
 **Formato testuale lossless e aggressivamente token-efficient per la comunicazione tra agenti AI.**
 
 ADP (versione 0.2) è una libreria Python che definisce e implementa un
