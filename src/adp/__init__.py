@@ -22,6 +22,8 @@ from adp.prompt import system_prompt, few_shot_examples, few_shot_block
 from adp.lut import DEFAULT_AGENT_LUT, validate_lut
 from adp import tpd
 from adp.db import ADPStore
+from adp import integrity
+from adp.integrity import sign, verify, is_signed, IntegrityError
 try:
     from adp import image
 except ImportError:
