@@ -514,7 +514,24 @@ per pHash. Installa con `uv sync --extra bench`.
 
 ## Usare ADP in Claude Code
 
-Sei modalità di integrazione, dalla più semplice alla più potente.
+### Plugin pronto (raccomandato)
+
+Il repository contiene `claude-plugin/`, un plugin Claude Code completo
+con skill, subagent `adp-agent`, nove slash command, hook contestuale e
+script di installazione. Setup in una riga:
+
+```bash
+bash /path/to/GoalLanguageAgents/claude-plugin/install.sh
+# Riavvia Claude Code: /adp-encode, /adp-decode, /adp-bench, ... attivi
+```
+
+Vedi [`claude-plugin/README.md`](claude-plugin/README.md) per dettagli,
+disinstallazione e personalizzazioni.
+
+### Setup manuale (alternativa)
+
+Se preferisci configurare a mano senza il plugin packaged, sei
+modalità di integrazione, dalla più semplice alla più potente.
 
 ### 1. CLAUDE.md di progetto
 
