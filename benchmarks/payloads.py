@@ -37,6 +37,19 @@ LONG_TEXT_EN: dict[str, Any] = {
     ),
 }
 
+LONG_TEXT_ZH: dict[str, Any] = {
+    "title": "季度摘要",
+    "body": (
+        "营业收入同比增长12%,主要由欧洲、中东和非洲地区的企业销售推动。"
+        "运营支出保持稳定,利润率有所扩大。\n\n"
+        "客户流失率降至2.1%,为过去六个季度的最低水平。新增标志性客户:47个。"
+        "按年度经常性收入计,前三大行业为:软件即服务、金融科技、医疗保健。\n\n"
+        "展望:谨慎乐观。宏观经济逆风仍在,但下一季度的管道覆盖率为3.4倍,"
+        "高于3.0倍的门槛。"
+    ),
+}
+
+
 LONG_TEXT_IT: dict[str, Any] = {
     "titolo": "Sintesi Trimestrale",
     "corpo": (
@@ -63,6 +76,16 @@ SPECIAL_CHARS_EN: dict[str, Any] = {
     "quoted_quotes": 'She said "hi" and left.',
     "backslash_path": "C:\\Users\\admin\\file.txt",
 }
+
+SPECIAL_CHARS_ZH: dict[str, Any] = {
+    "code_snippet": 'function f(x) {\n  return x["a\\b\\"c"] + 1;\n}',
+    "emoji": "完成 ✅ 🎉 — 100% 可靠 🚀",
+    "math": "α + β = γ; ∑ᵢ xᵢ → ∞",
+    "quotes": '她说"你好"然后离开了。',
+    "path": "C:\\用户\\管理员\\文件.txt",
+    "mixed_chinese": "今天天气很好,温度25°C,湿度60%。",
+}
+
 
 SPECIAL_CHARS_IT: dict[str, Any] = {
     "frammento_codice": 'function f(x) {\n  return x["a\\b\\"c"] + 1;\n}',
@@ -190,6 +213,27 @@ AGENT_TASK_EN: dict[str, Any] = {
     "expected_reply": "step_result",
 }
 
+AGENT_TASK_ZH: dict[str, Any] = {
+    "msg_id": "m_8c14",
+    "agent_from": "planner",
+    "agent_to": "executor",
+    "intent": "execute_step",
+    "step": {
+        "n": 3,
+        "tool": "shell",
+        "command": "uv run pytest -k 'roundtrip'",
+        "timeout_s": 60,
+        "description": "运行回归测试以验证修复",
+    },
+    "context": {
+        "task_id": "T-204",
+        "previous_outputs": ["编译成功", "代码检查通过"],
+        "constraints": ["必须通过测试", "禁止外部网络"],
+    },
+    "expected_reply": "step_result",
+}
+
+
 AGENT_TASK_IT: dict[str, Any] = {
     "msg_id": "m_8c14",
     "agente_da": "pianificatore",
@@ -253,20 +297,34 @@ BINARY_EN: dict[str, Any] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# 10. Pure mono-field text (worst case for ADP, best case for RAW flat text)
+# ---------------------------------------------------------------------------
+PURE_TEXT_EN: dict[str, Any] = {"body": LONG_TEXT_EN["body"]}
+PURE_TEXT_IT: dict[str, Any] = {"corpo": LONG_TEXT_IT["corpo"]}
+PURE_TEXT_ZH: dict[str, Any] = {"body": LONG_TEXT_ZH["body"]}
+
+
 PAYLOADS: dict[str, dict[str, Any]] = {
     "short_string_en": SHORT_STRING_EN,
     "short_string_it": SHORT_STRING_IT,
     "long_text_en": LONG_TEXT_EN,
     "long_text_it": LONG_TEXT_IT,
+    "long_text_zh": LONG_TEXT_ZH,
     "special_chars_en": SPECIAL_CHARS_EN,
     "special_chars_it": SPECIAL_CHARS_IT,
+    "special_chars_zh": SPECIAL_CHARS_ZH,
     "tabular_en": TABULAR_EN,
     "tabular_it": TABULAR_IT,
     "database_en": DATABASE_EN,
     "database_it": DATABASE_IT,
     "agent_task_en": AGENT_TASK_EN,
     "agent_task_it": AGENT_TASK_IT,
+    "agent_task_zh": AGENT_TASK_ZH,
     "contacts_en": CONTACTS_EN,
     "nested_table_en": NESTED_TABLE_EN,
     "binary_en": BINARY_EN,
+    "pure_text_en": PURE_TEXT_EN,
+    "pure_text_it": PURE_TEXT_IT,
+    "pure_text_zh": PURE_TEXT_ZH,
 }

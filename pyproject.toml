@@ -26,7 +26,9 @@ dev = [
     "tiktoken>=0.7",
 ]
 bench = [
+    "imagehash>=4.3.2",
     "msgpack>=1.1.2",
+    "pillow>=12.2.0",
     "pyyaml>=6.0.3",
     "tomli-w>=1.2.0",
 ]
