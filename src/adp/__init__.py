@@ -17,7 +17,7 @@ Public API:
 
 from adp.parser import decode, ADPParseError
 from adp.serializer import encode
-from adp.converters import to_json, from_json, to_markdown
+from adp.converters import to_json, from_json, to_markdown, to_html
 from adp.prompt import system_prompt, few_shot_examples, few_shot_block
 from adp.lut import DEFAULT_AGENT_LUT, validate_lut
 from adp import tpd
@@ -37,6 +37,7 @@ __all__ = [
     "to_json",
     "from_json",
     "to_markdown",
+    "to_html",
     "system_prompt",
     "few_shot_examples",
     "few_shot_block",

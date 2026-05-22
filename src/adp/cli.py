@@ -20,7 +20,7 @@ import click
 
 from adp.parser import decode, ADPParseError
 from adp.serializer import encode
-from adp.converters import to_json, from_json, to_markdown
+from adp.converters import to_json, from_json, to_markdown, to_html
 from adp.prompt import system_prompt, few_shot_block
 from adp.integrity import sign as integrity_sign, verify as integrity_verify, is_signed, strip as integrity_strip, IntegrityError
 
@@ -62,6 +62,34 @@ def cmd_to_md() -> None:
         sys.stdout.write(to_markdown(raw))
     except ADPParseError as e:
         raise click.ClickException(f"ADP parse error: {e}")
+
+
+@main.command("to-html")
+@click.option("--title", default="ADP document", help="HTML page title")
+@click.option("--fragment", is_flag=True, help="Emit only inner content (no <!DOCTYPE> wrapper)")
+def cmd_to_html(title: str, fragment: bool) -> None:
+    """Read ADP from stdin, write a standalone HTML page to stdout."""
+    raw = sys.stdin.read()
+    try:
+        sys.stdout.write(to_html(raw, title=title, standalone=not fragment))
+    except ADPParseError as e:
+        raise click.ClickException(f"ADP parse error: {e}")
+
+
+@main.command("serve")
+@click.option("--port", default=8765, help="HTTP port (default 8765)")
+@click.option("--host", default="127.0.0.1", help="Bind host (default 127.0.0.1)")
+@click.option("--title", default="ADP live stream", help="Page title")
+def cmd_serve(port: int, host: str, title: str) -> None:
+    """Start a live HTML viewer: reads ADP records from stdin, appends them to
+    a single web page that auto-updates via Server-Sent Events.
+
+    Esempio:
+        my-agent-producing-adp | uv run adp serve --port 8000
+        # Apri http://localhost:8000 in un browser
+    """
+    from adp.serve import run_live_server
+    run_live_server(host=host, port=port, title=title)
 
 
 @main.command("validate")

@@ -25,11 +25,12 @@ di dati.
 7. [Riduzione token misurata](#riduzione-token-misurata)
 8. [Esempi a confronto](#esempi-a-confronto)
 9. [Immagini](#immagini)
-10. [Integrità — sign / verify](#integrità--sign--verify)
-11. [Struttura del progetto](#struttura-del-progetto)
-12. [Sviluppo e test](#sviluppo-e-test)
-13. [Roadmap](#roadmap)
-14. [Licenza](#licenza)
+10. [Usare ADP in Claude Code](#usare-adp-in-claude-code)
+11. [Integrità — sign / verify](#integrità--sign--verify)
+12. [Struttura del progetto](#struttura-del-progetto)
+13. [Sviluppo e test](#sviluppo-e-test)
+14. [Roadmap](#roadmap)
+15. [Licenza](#licenza)
 
 ---
 
@@ -146,6 +147,43 @@ Grammatica completa: vedi
 | ADP → JSON | `adp.to_json(s)` | ✓ | macchine senza AI |
 | JSON → ADP | `adp.from_json(s)` | ✓ | importazione da JSON |
 | ADP → Markdown | `adp.to_markdown(s)` | ✗ (one-way) | lettura umana |
+| ADP → HTML | `adp.to_html(s)` | ✗ (one-way) | dashboard, browser |
+
+### HTML standalone con auto dark mode
+
+```python
+html_page = adp.to_html(adp_msg, title="Report Q1")
+Path("report.html").write_text(html_page)
+```
+
+Produce un documento HTML5 completo con CSS embedded, tabelle bordate,
+auto-switch light/dark via `prefers-color-scheme`, tooltip sui bytes,
+code-block per testi multilinea. Da CLI: `adp to-html < msg.adp > out.html`.
+
+### Pagina HTML dinamica (live viewer append-only)
+
+Per scenari in cui un agente emette record ADP a flusso continuo (log,
+monitoring, output multi-step), il sottocomando `adp serve` avvia un
+piccolo server HTTP che apre una **pagina unica** auto-aggiornata via
+Server-Sent Events: ogni nuovo record viene renderizzato e accodato in
+fondo senza ricaricare la pagina.
+
+```bash
+my-agent-emitting-adp | uv run adp serve --port 8000
+# Apri http://localhost:8000 nel browser; la pagina si aggiorna in tempo reale
+```
+
+Caratteristiche:
+
+- zero dipendenze (usa solo stdlib `http.server`)
+- pagina cronologica con timestamp per ogni record
+- backfill automatico dei record già ricevuti se apri il browser dopo
+- indicatore live/disconnected in basso a destra
+- contatore record nell'header
+- mantiene auto-scroll in fondo all'arrivo di nuovi dati
+
+Casi d'uso tipici: monitoraggio agente long-running, debug di pipeline
+multi-step, dashboard di sviluppo, demo a clienti.
 
 Bytes nel passaggio JSON sono codificati come
 `{"_adp_bytes": "<base64>"}` per preservarli.
@@ -474,6 +512,134 @@ all'invio inline ripetuto.
 Dipendenze opzionali: `pillow` per resize/JPEG/WEBP, `imagehash`
 per pHash. Installa con `uv sync --extra bench`.
 
+## Usare ADP in Claude Code
+
+Sei modalità di integrazione, dalla più semplice alla più potente.
+
+### 1. CLAUDE.md di progetto
+
+Aggiungi al `CLAUDE.md` del repository (o crea `.claude/CLAUDE.md`):
+
+```markdown
+In questo repo gli agenti comunicano in **ADP** (vedi docs/superpowers/specs).
+Quando serializzi dati strutturati tra subagent / log / artefatti:
+- usa `adp.encode(obj)` invece di `json.dumps(obj)`
+- usa `adp.decode(s)` invece di `json.loads(s)`
+- per umani: `adp.to_markdown(s)` o `adp.to_html(s)`
+```
+
+Effetto: Claude Code conosce ADP all'avvio della sessione.
+
+### 2. Slash command custom `/adp`
+
+Crea `.claude/commands/adp.md`:
+
+```markdown
+---
+description: Encode/decode/bench ADP da stdin
+argument-hint: <encode|decode|to-md|to-html|sign|verify|bench> [opts]
+---
+
+Esegui `uv run --directory /path/to/GoalLanguageAgents adp $ARGUMENTS`.
+```
+
+In sessione: `/adp encode < input.json`, `/adp serve --port 8000`, ecc.
+
+### 3. Subagent dedicato
+
+Crea `.claude/agents/adp-agent.md` con istruzione di rispondere sempre
+in ADP. Utile per estrazioni, classificazioni, report.
+
+### 4. MCP server
+
+Espone ADP come tool nativo MCP:
+
+```python
+# mcp-adp/server.py
+from mcp.server.fastmcp import FastMCP
+import adp
+
+mcp = FastMCP("adp")
+
+@mcp.tool()
+def adp_encode(json_str: str) -> str:
+    return adp.from_json(json_str)
+
+@mcp.tool()
+def adp_decode(adp_str: str) -> str:
+    return adp.to_json(adp_str)
+
+@mcp.tool()
+def adp_to_html(adp_str: str) -> str:
+    return adp.to_html(adp_str)
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+Registra in `~/.claude/.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "adp": {
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/GoalLanguageAgents",
+               "python", "mcp-adp/server.py"]
+    }
+  }
+}
+```
+
+Riavvia Claude Code → ora ha `mcp__adp__encode/decode/to_html/...` come
+tool nativi.
+
+### 5. Hook SessionStart per pre-caricare il prompt
+
+In `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionStart": [{
+      "matcher": "",
+      "hooks": [{
+        "type": "command",
+        "command": "uv run --directory /path/to/GoalLanguageAgents adp prompt"
+      }]
+    }]
+  }
+}
+```
+
+Effetto: all'avvio sessione il prompt di sistema ADP è già nel
+contesto.
+
+### 6. Allowlist permission
+
+Per evitare conferme manuali ad ogni invocazione, aggiungi a
+`.claude/settings.json`:
+
+```json
+{
+  "permissions": {
+    "allow": [
+      "Bash(uv run adp:*)",
+      "Bash(uv run --directory * adp:*)"
+    ]
+  }
+}
+```
+
+### Verifica setup completo
+
+```bash
+uv run adp --version           # libreria raggiungibile
+claude mcp list 2>&1 | grep adp  # se hai impostato MCP server
+ls .claude/commands/adp.md     # slash command attivo
+ls .claude/agents/adp-agent.md # subagent attivo
+```
+
 ## Integrità — sign / verify
 
 ADP di base non protegge un messaggio in transito: garantisce solo
@@ -596,7 +762,8 @@ GoalLanguageAgents/
 │   ├── db.py              ADPStore: DB persistente di blob testuali
 │   ├── image.py           7 strategie compressione immagini per LLM
 │   ├── integrity.py       sign / verify (CRC32, SHA-256, HMAC)
-│   └── cli.py             CLI Click (encode/decode/sign/verify/bench/...)
+│   ├── serve.py           live HTML viewer via SSE (append-only)
+│   └── cli.py             CLI Click (encode/decode/sign/verify/serve/...)
 ├── tests/
 │   ├── test_roundtrip.py        round-trip su 23 payload
 │   ├── test_converters.py       JSON e Markdown
