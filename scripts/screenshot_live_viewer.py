@@ -67,7 +67,7 @@ def main() -> int:
             browser = p.chromium.launch()
             try:
                 page = browser.new_page(viewport={"width": 1200, "height": 900})
-                page.goto(URL, wait_until="networkidle", timeout=10_000)
+                page.goto(URL, wait_until="domcontentloaded", timeout=10_000)
                 page.wait_for_selector(".adp-log-entry", timeout=5_000)
                 page.wait_for_timeout(800)  # smooth-scroll completion
                 page.screenshot(path=str(OUT), full_page=False)

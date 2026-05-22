@@ -184,6 +184,8 @@ my-agent-emitting-adp | uv run adp serve --port 8000
 # Apri http://localhost:8000 nel browser; la pagina si aggiorna in tempo reale
 ```
 
+![Live viewer SSE](docs/img/live-viewer.png)
+
 Caratteristiche:
 
 - zero dipendenze (usa solo stdlib `http.server`)
