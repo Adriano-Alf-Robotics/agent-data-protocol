@@ -1,7 +1,7 @@
 [project]
-name = "gla"
-version = "0.1.0"
-description = "Goal Language Agents — token-efficient lossless serialization format for AI agent communication"
+name = "adp"
+version = "0.2.0"
+description = "ADP — Adriano Dal Pastro format. Token-efficient lossless serialization for AI agent communication"
 authors = [{name = "Adriano Dal Pastro", email = "adrianodalpastro@tielogic.com"}]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -32,7 +32,7 @@ bench = [
 ]
 
 [project.scripts]
-gla = "gla.cli:main"
+adp = "adp.cli:main"
 
 [project.urls]
 Homepage = "https://github.com/adrianodalpastro/GoalLanguageAgents"
@@ -43,7 +43,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/gla"]
+packages = ["src/adp"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

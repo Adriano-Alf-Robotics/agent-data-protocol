@@ -18,17 +18,27 @@ import msgpack
 import tomli_w
 import yaml
 
-from gla import encode as gla_encode, decode as gla_decode
+from adp import encode as adp_encode, decode as adp_decode, DEFAULT_AGENT_LUT
 
 
-# ---------- GLA ----------
+# ---------- ADP ----------
 
 def gla_enc(obj: dict[str, Any]) -> str:
-    return gla_encode(obj)
+    return adp_encode(obj)
 
 
 def gla_dec(s: str) -> dict[str, Any]:
-    return gla_decode(s)
+    return adp_decode(s)
+
+
+# ---------- ADP + LUT ----------
+
+def adp_lut_enc(obj: dict[str, Any]) -> str:
+    return adp_encode(obj, key_lut=DEFAULT_AGENT_LUT)
+
+
+def adp_lut_dec(s: str) -> dict[str, Any]:
+    return adp_decode(s, key_lut=DEFAULT_AGENT_LUT)
 
 
 # ---------- JSON ----------
@@ -144,7 +154,8 @@ FormatSpec = tuple[
 
 def all_formats() -> list[FormatSpec]:
     return [
-        ("GLA",            gla_enc,         gla_dec,         True),
+        ("ADP",            gla_enc,         gla_dec,         True),
+        ("ADP+LUT",        adp_lut_enc,     adp_lut_dec,     True),
         ("JSON-min",       json_min_enc,    json_dec,        True),
         ("JSON-pretty",    json_pretty_enc, json_dec,        True),
         ("YAML",           yaml_enc,        yaml_dec,        True),

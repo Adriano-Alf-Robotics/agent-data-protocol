@@ -1,22 +1,47 @@
-"""GLA parser. Recursive-descent, zero dependencies.
+"""ADP parser. Recursive-descent, zero dependencies.
 
-Parses a GLA document (sequence of `&name:value&` records) into a Python dict.
+Parses an ADP document into a Python dict.
+
+Document syntax (v0.2):
+    document    := pair (';' pair)* ';'?
+    pair        := IDENT '=' value
+    value       := primitive | string | bytes | list | map | table
+    primitive   := integer | float | boolean | null
+    boolean     := '1' | '0'
+    null        := '~'
+    integer     := -?[0-9]+         ;  use suffix 'i' to disambiguate 0/1 from bool
+    float       := -?[0-9]+'.'[0-9]+ (e[+-]?[0-9]+)?
+    string      := bare | quoted
+    bare        := [A-Za-z_][A-Za-z0-9_.\\-/@+*?<>%():$]*
+    quoted      := '"' (ESC | NON_QUOTE)* '"'
+    ESC         := '\\"' | '\\\\'
+    bytes       := 'b!' BASE64_CHARS
+    list        := '[' (value (',' value)*)? ']'
+    map         := '{' (entry (';' entry)*)? '}'
+    entry       := IDENT '=' value
+    table       := '#' header ('|' row)+
+    header      := IDENT (',' IDENT)*
+    row         := value (',' value)*
 
 Public API:
     decode(s: str) -> dict
-    GLAParseError
+    ADPParseError
 """
 
 from __future__ import annotations
 
+import base64
+import re
 from typing import Any
 
 
-class GLAParseError(ValueError):
-    """Raised when a GLA document cannot be parsed."""
+class ADPParseError(ValueError):
+    """Raised when an ADP document cannot be parsed."""
 
 
-_SEPS = ",;]}|&\n\r"
+_SEPS = ",;]}|\n\r"  # characters that terminate a scalar token at top level / inside containers
+_NUM_RE = re.compile(r"^-?\d+(\.\d+)?([eE][+-]?\d+)?$")
+_BASE64_CHARS = set("ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=")
 
 
 class _Parser:
@@ -32,7 +57,7 @@ class _Parser:
 
     def _expect(self, ch: str) -> None:
         if self.s[self.pos : self.pos + len(ch)] != ch:
-            raise GLAParseError(
+            raise ADPParseError(
                 f"expected {ch!r} at pos {self.pos} (got {self.s[self.pos : self.pos + len(ch)]!r})"
             )
         self.pos += len(ch)
@@ -44,19 +69,25 @@ class _Parser:
     def parse_document(self) -> dict[str, Any]:
         out: dict[str, Any] = {}
         self._skip_ws()
-        while self.pos < self.n:
-            name, value = self._parse_record()
+        if self.pos >= self.n:
+            return out
+        while True:
+            name = self._parse_name()
+            self._expect("=")
+            value = self._parse_value()
             out[name] = value
             self._skip_ws()
-        return out
-
-    def _parse_record(self) -> tuple[str, Any]:
-        self._expect("&")
-        name = self._parse_name()
-        self._expect(":")
-        value = self._parse_value()
-        self._expect("&")
-        return name, value
+            if self.pos >= self.n:
+                return out
+            if self._peek() == ";":
+                self.pos += 1
+                self._skip_ws()
+                if self.pos >= self.n:
+                    return out
+                continue
+            raise ADPParseError(
+                f"expected ';' or end-of-input after value at pos {self.pos} (got {self._peek()!r})"
+            )
 
     def _parse_name(self) -> str:
         start = self.pos
@@ -67,12 +98,12 @@ class _Parser:
             else:
                 break
         if start == self.pos:
-            raise GLAParseError(f"expected identifier at pos {self.pos}")
+            raise ADPParseError(f"expected identifier at pos {self.pos}")
         return self.s[start : self.pos]
 
     def _parse_value(self) -> Any:
         if self.pos >= self.n:
-            raise GLAParseError(f"unexpected EOF at pos {self.pos}")
+            raise ADPParseError(f"unexpected EOF at pos {self.pos}")
         c = self.s[self.pos]
         if c == '"':
             return self._parse_quoted_string()
@@ -82,6 +113,9 @@ class _Parser:
             return self._parse_map()
         if c == "#":
             return self._parse_table()
+        # bytes prefix b!
+        if c == "b" and self.s[self.pos : self.pos + 2] == "b!":
+            return self._parse_bytes()
         return self._parse_scalar_or_bare()
 
     def _parse_quoted_string(self) -> str:
@@ -91,7 +125,7 @@ class _Parser:
             c = self.s[self.pos]
             if c == "\\":
                 if self.pos + 1 >= self.n:
-                    raise GLAParseError(f"dangling escape at pos {self.pos}")
+                    raise ADPParseError(f"dangling escape at pos {self.pos}")
                 nxt = self.s[self.pos + 1]
                 if nxt == '"':
                     out.append('"')
@@ -106,7 +140,18 @@ class _Parser:
             else:
                 out.append(c)
                 self.pos += 1
-        raise GLAParseError("unterminated quoted string")
+        raise ADPParseError("unterminated quoted string")
+
+    def _parse_bytes(self) -> bytes:
+        self.pos += 2  # skip 'b!'
+        start = self.pos
+        while self.pos < self.n and self.s[self.pos] in _BASE64_CHARS:
+            self.pos += 1
+        b64 = self.s[start : self.pos]
+        try:
+            return base64.b64decode(b64.encode("ascii"), validate=True)
+        except Exception as e:
+            raise ADPParseError(f"invalid base64 at pos {start}: {e}")
 
     def _parse_list(self) -> list[Any]:
         self._expect("[")
@@ -123,7 +168,7 @@ class _Parser:
             if c == "]":
                 self.pos += 1
                 return out
-            raise GLAParseError(f"expected ',' or ']' in list at pos {self.pos}")
+            raise ADPParseError(f"expected ',' or ']' in list at pos {self.pos}")
 
     def _parse_map(self) -> dict[str, Any]:
         self._expect("{")
@@ -143,7 +188,7 @@ class _Parser:
             if c == "}":
                 self.pos += 1
                 return out
-            raise GLAParseError(f"expected ';' or '}}' in map at pos {self.pos}")
+            raise ADPParseError(f"expected ';' or '}}' in map at pos {self.pos}")
 
     def _parse_table(self) -> list[dict[str, Any]]:
         self._expect("#")
@@ -159,7 +204,7 @@ class _Parser:
                 self.pos += 1
                 row_vals.append(self._parse_value())
             if len(row_vals) != len(headers):
-                raise GLAParseError(
+                raise ADPParseError(
                     f"row width {len(row_vals)} != header width {len(headers)} at pos {self.pos}"
                 )
             rows.append(dict(zip(headers, row_vals)))
@@ -186,20 +231,24 @@ def _interpret_token(tok: str) -> Any:
         return 1
     if tok == "0i":
         return 0
-    try:
+    if _NUM_RE.match(tok):
+        if "." in tok or "e" in tok or "E" in tok:
+            return float(tok)
         return int(tok)
-    except ValueError:
-        pass
-    try:
-        return float(tok)
-    except ValueError:
-        pass
     return tok
 
 
-def decode(s: str) -> dict[str, Any]:
-    """Decode a GLA document string into a Python dict.
+def decode(s: str, *, key_lut: dict[str, str] | None = None) -> dict[str, Any]:
+    """Decode an ADP document string into a Python dict.
 
-    Raises GLAParseError on malformed input.
+    key_lut: same LUT used by the sender (encode). Keys are expanded back
+    to their long form after parsing.
+
+    Raises ADPParseError on malformed input.
     """
-    return _Parser(s).parse_document()
+    out = _Parser(s).parse_document()
+    if key_lut:
+        from adp.lut import apply_decode, validate_lut
+        validate_lut(key_lut)
+        out = apply_decode(out, key_lut)
+    return out

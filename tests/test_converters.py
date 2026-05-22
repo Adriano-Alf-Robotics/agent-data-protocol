@@ -1,16 +1,16 @@
-"""Tests for GLA <-> JSON and GLA -> Markdown converters."""
+"""Tests for ADP <-> JSON and ADP -> Markdown converters."""
 
 from __future__ import annotations
 
 import json
 
-from gla import from_json, to_json, to_markdown, decode, encode
+from adp import from_json, to_json, to_markdown, decode, encode
 
 
 def test_json_roundtrip_simple() -> None:
     src = {"user": {"id": 42, "name": "Adriano"}, "tags": ["a", "b"]}
-    gla = encode(src)
-    j = to_json(gla)
+    adp = encode(src)
+    j = to_json(adp)
     assert json.loads(j) == src
     gla2 = from_json(j)
     assert decode(gla2) == src
@@ -23,12 +23,12 @@ def test_json_top_level_must_be_object() -> None:
 
 
 def test_to_markdown_renders_fields() -> None:
-    gla = encode({
+    adp = encode({
         "user": {"id": 42, "name": "Adriano", "active": True},
         "metrics": [{"id": 1, "v": 10.0}, {"id": 2, "v": 20.0}],
         "report": "linea1\nlinea2",
     })
-    md = to_markdown(gla)
+    md = to_markdown(adp)
     assert "## user" in md
     assert "**id**: 42" in md
     assert "## metrics" in md
@@ -39,16 +39,16 @@ def test_to_markdown_renders_fields() -> None:
 
 
 def test_to_markdown_null_renders() -> None:
-    gla = encode({"task": {"owner": None}})
-    md = to_markdown(gla)
+    adp = encode({"task": {"owner": None}})
+    md = to_markdown(adp)
     assert "**owner**: —" in md
 
 
 def test_to_markdown_pipe_escape_in_table() -> None:
-    gla = encode({"data": [
+    adp = encode({"data": [
         {"name": "a|b", "val": "x"},
         {"name": "c", "val": "y|z"},
     ]})
-    md = to_markdown(gla)
+    md = to_markdown(adp)
     assert "a\\|b" in md
     assert "y\\|z" in md

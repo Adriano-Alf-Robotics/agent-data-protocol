@@ -1,4 +1,4 @@
-"""Benchmark comparativo GLA vs JSON/YAML/TOML/MsgPack/XML/CSV.
+"""Benchmark comparativo ADP vs JSON/YAML/TOML/MsgPack/XML/CSV.
 
 Produce un report Markdown con:
 - tabella metriche per ogni payload (bytes, token cl100k/o200k, tempo enc/dec, lossless)
@@ -139,7 +139,7 @@ def render_markdown(results: list[Result]) -> str:
         by_payload.setdefault(r.payload, []).append(r)
 
     parts: list[str] = []
-    parts.append("# GLA — Analisi Comparativa vs Formati Esistenti")
+    parts.append("# ADP — Analisi Comparativa vs Formati Esistenti")
     parts.append("")
     parts.append(f"Repeat per misura tempo: **{REPEAT}** esecuzioni (mediana).")
     parts.append("Token count via `tiktoken`: `cl100k_base` (GPT-4 / Claude 3.x) e `o200k_base` (GPT-4o / Opus 4.x).")
@@ -149,17 +149,19 @@ def render_markdown(results: list[Result]) -> str:
     for pname in by_payload:
         parts.append(f"- [{pname}](#{pname.replace('_', '-')})")
     parts.append("")
-    parts.append("## Sintesi globale — risparmio token GLA vs JSON-min")
+    parts.append("## Sintesi globale — risparmio token ADP vs JSON-min")
     parts.append("")
-    parts.append("| Payload | JSON-min tok | GLA tok | Δ cl100k | Δ o200k |")
-    parts.append("|---------|-------------:|--------:|---------:|--------:|")
+    parts.append("| Payload | JSON-min tok | ADP tok | ADP+LUT tok | Δ ADP cl100k | Δ ADP+LUT cl100k |")
+    parts.append("|---------|-------------:|--------:|------------:|-------------:|-----------------:|")
     for pname, rows in by_payload.items():
-        gla = next((r for r in rows if r.fmt == "GLA"), None)
+        adp = next((r for r in rows if r.fmt == "ADP"), None)
+        adp_lut = next((r for r in rows if r.fmt == "ADP+LUT"), None)
         jsm = next((r for r in rows if r.fmt == "JSON-min"), None)
-        if gla and jsm and jsm.tokens_cl100k > 0:
-            d_cl = _safe_pct(gla.tokens_cl100k, jsm.tokens_cl100k)
-            d_o = _safe_pct(gla.tokens_o200k, jsm.tokens_o200k)
-            parts.append(f"| {pname} | {jsm.tokens_cl100k} | {gla.tokens_cl100k} | {d_cl} | {d_o} |")
+        if adp and jsm and jsm.tokens_cl100k > 0:
+            d_cl = _safe_pct(adp.tokens_cl100k, jsm.tokens_cl100k)
+            d_lut = _safe_pct(adp_lut.tokens_cl100k, jsm.tokens_cl100k) if adp_lut and adp_lut.tokens_cl100k else "—"
+            lut_tok = adp_lut.tokens_cl100k if adp_lut and adp_lut.tokens_cl100k else "—"
+            parts.append(f"| {pname} | {jsm.tokens_cl100k} | {adp.tokens_cl100k} | {lut_tok} | {d_cl} | {d_lut} |")
     parts.append("")
 
     for pname, rows in by_payload.items():
@@ -210,10 +212,10 @@ def render_markdown(results: list[Result]) -> str:
     parts.append("## Note metodologiche")
     parts.append("")
     parts.append("- **Lossless** = `decode(encode(obj)) == obj` su tipi Python nativi. XML manca di decoder (encoder best-effort); CSV non rappresenta strutture annidate; MsgPack è binario, qui base64-encoded per il canale testuale tipico LLM.")
-    parts.append("- **Δ vs JSON-min** = riduzione percentuale token rispetto a JSON minified. Positivo = GLA risparmia token.")
+    parts.append("- **Δ vs JSON-min** = riduzione percentuale token rispetto a JSON minified. Positivo = ADP risparmia token.")
     parts.append("- **Tempi enc/dec**: misurati con `time.perf_counter_ns()`, ripetuti 200 volte, mediana. Riflettono CPU-only, in-memory: nessun I/O, nessuna rete. Significativi solo per confronti relativi sulla stessa macchina.")
     parts.append("- **Tempi di trasferimento di rete**: proporzionali ai bytes. Esempio: su un canale a 1 Mbit/s reale, 1 KB ≈ 8 ms. La colonna `Bytes` è il proxy diretto del costo trasferimento.")
-    parts.append("- **IT vs EN**: i tokenizer LLM hanno vocabolari prevalentemente inglesi. Lo stesso contenuto in italiano genera tipicamente 15-40% token in più rispetto all'inglese. GLA mantiene il vantaggio strutturale (riduzione overhead di sintassi) indipendentemente dalla lingua.")
+    parts.append("- **IT vs EN**: i tokenizer LLM hanno vocabolari prevalentemente inglesi. Lo stesso contenuto in italiano genera tipicamente 15-40% token in più rispetto all'inglese. ADP mantiene il vantaggio strutturale (riduzione overhead di sintassi) indipendentemente dalla lingua.")
     parts.append("")
     return "\n".join(parts)
 

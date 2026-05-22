@@ -3,6 +3,38 @@ revision = 3
 requires-python = ">=3.11"
 
 [[package]]
+name = "adp"
+version = "0.2.0"
+source = { editable = "." }
+dependencies = [
+    { name = "click" },
+]
+
+[package.optional-dependencies]
+bench = [
+    { name = "msgpack" },
+    { name = "pyyaml" },
+    { name = "tomli-w" },
+]
+dev = [
+    { name = "pytest" },
+    { name = "pytest-cov" },
+    { name = "tiktoken" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "click", specifier = ">=8.1" },
+    { name = "msgpack", marker = "extra == 'bench'", specifier = ">=1.1.2" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
+    { name = "pyyaml", marker = "extra == 'bench'", specifier = ">=6.0.3" },
+    { name = "tiktoken", marker = "extra == 'dev'", specifier = ">=0.7" },
+    { name = "tomli-w", marker = "extra == 'bench'", specifier = ">=1.2.0" },
+]
+provides-extras = ["dev", "bench"]
+
+[[package]]
 name = "certifi"
 version = "2026.5.20"
 source = { registry = "https://pypi.org/simple" }
@@ -224,38 +256,6 @@ wheels = [
 toml = [
     { name = "tomli", marker = "python_full_version <= '3.11'" },
 ]
-
-[[package]]
-name = "gla"
-version = "0.1.0"
-source = { editable = "." }
-dependencies = [
-    { name = "click" },
-]
-
-[package.optional-dependencies]
-bench = [
-    { name = "msgpack" },
-    { name = "pyyaml" },
-    { name = "tomli-w" },
-]
-dev = [
-    { name = "pytest" },
-    { name = "pytest-cov" },
-    { name = "tiktoken" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "click", specifier = ">=8.1" },
-    { name = "msgpack", marker = "extra == 'bench'", specifier = ">=1.1.2" },
-    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
-    { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
-    { name = "pyyaml", marker = "extra == 'bench'", specifier = ">=6.0.3" },
-    { name = "tiktoken", marker = "extra == 'dev'", specifier = ">=0.7" },
-    { name = "tomli-w", marker = "extra == 'bench'", specifier = ">=1.2.0" },
-]
-provides-extras = ["dev", "bench"]
 
 [[package]]
 name = "idna"

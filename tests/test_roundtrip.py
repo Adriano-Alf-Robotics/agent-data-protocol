@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from gla import encode, decode
+from adp import encode, decode
 
 
 PAYLOADS = [
@@ -68,7 +68,7 @@ def test_roundtrip_python(obj: dict) -> None:
     """decode(encode(obj)) must equal obj."""
     s = encode(obj)
     back = decode(s)
-    assert back == obj, f"round-trip mismatch\ninput:  {obj!r}\nGLA:    {s!r}\noutput: {back!r}"
+    assert back == obj, f"round-trip mismatch\ninput:  {obj!r}\nADP:    {s!r}\noutput: {back!r}"
 
 
 @pytest.mark.parametrize("obj", PAYLOADS)

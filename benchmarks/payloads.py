@@ -210,6 +210,49 @@ AGENT_TASK_IT: dict[str, Any] = {
 }
 
 
+# ---------------------------------------------------------------------------
+# 7. URL/email/path-heavy payload (v0.2 ample bare strings shine)
+# ---------------------------------------------------------------------------
+CONTACTS_EN: dict[str, Any] = {
+    "contacts": [
+        {"id": 1, "name": "Alice",  "email": "alice@example.com",  "homepage": "https://alice.example/", "country": "US"},
+        {"id": 2, "name": "Bruno",  "email": "bruno@example.com",  "homepage": "https://bruno.example/", "country": "IT"},
+        {"id": 3, "name": "Carla",  "email": "carla@example.com",  "homepage": "https://carla.example/", "country": "FR"},
+        {"id": 4, "name": "David",  "email": "david@example.com",  "homepage": "https://david.example/", "country": "DE"},
+        {"id": 5, "name": "Elena",  "email": "elena@example.com",  "homepage": "https://elena.example/", "country": "ES"},
+    ]
+}
+
+
+# ---------------------------------------------------------------------------
+# 8. Nested-table payload (v0.2: table cells contain lists/maps)
+# ---------------------------------------------------------------------------
+NESTED_TABLE_EN: dict[str, Any] = {
+    "users": [
+        {"id": 1, "name": "alice", "roles": ["admin", "ops"],     "perms": {"read": True, "write": True}},
+        {"id": 2, "name": "bob",   "roles": ["dev"],              "perms": {"read": True, "write": False}},
+        {"id": 3, "name": "carol", "roles": ["dev", "qa"],        "perms": {"read": True, "write": False}},
+        {"id": 4, "name": "dan",   "roles": ["viewer"],           "perms": {"read": True, "write": False}},
+    ]
+}
+
+
+# ---------------------------------------------------------------------------
+# 9. Binary blob (small image-like payload)
+# ---------------------------------------------------------------------------
+import os as _os  # noqa: E402
+
+BINARY_EN: dict[str, Any] = {
+    "thumbnail": {
+        "name": "thumb.png",
+        "mime": "image/png",
+        "data": _os.urandom(256),   # 256 random bytes -> ~344 base64 chars
+        "width": 64,
+        "height": 64,
+    }
+}
+
+
 PAYLOADS: dict[str, dict[str, Any]] = {
     "short_string_en": SHORT_STRING_EN,
     "short_string_it": SHORT_STRING_IT,
@@ -223,4 +266,7 @@ PAYLOADS: dict[str, dict[str, Any]] = {
     "database_it": DATABASE_IT,
     "agent_task_en": AGENT_TASK_EN,
     "agent_task_it": AGENT_TASK_IT,
+    "contacts_en": CONTACTS_EN,
+    "nested_table_en": NESTED_TABLE_EN,
+    "binary_en": BINARY_EN,
 }

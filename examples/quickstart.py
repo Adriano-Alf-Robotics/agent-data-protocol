@@ -1,10 +1,10 @@
-"""Esempio minimo di utilizzo di GLA.
+"""Esempio minimo di utilizzo di ADP.
 
 Esegui con:
     uv run python examples/quickstart.py
 """
 
-import gla
+import adp
 
 
 def main() -> None:
@@ -20,30 +20,30 @@ def main() -> None:
     }
 
     print("=== Encoding ===")
-    encoded = gla.encode(payload)
+    encoded = adp.encode(payload)
     print(encoded)
     print()
 
     print("=== Round-trip (decode) ===")
-    decoded = gla.decode(encoded)
+    decoded = adp.decode(encoded)
     print(decoded)
     assert decoded == payload, "round-trip failed"
     print("OK: decode(encode(payload)) == payload")
     print()
 
     print("=== Conversione a JSON (per macchine non-AI) ===")
-    print(gla.to_json(encoded))
+    print(adp.to_json(encoded))
     print()
 
     print("=== Conversione a Markdown (per umani) ===")
-    print(gla.to_markdown(encoded))
+    print(adp.to_markdown(encoded))
     print()
 
     print("=== Persistenza ===")
     from pathlib import Path
-    p = Path("/tmp/gla_demo.gla")
+    p = Path("/tmp/gla_demo.adp")
     p.write_text(encoded, encoding="utf-8")
-    restored = gla.decode(p.read_text(encoding="utf-8"))
+    restored = adp.decode(p.read_text(encoding="utf-8"))
     assert restored == payload
     print(f"Salvato in {p} e ricaricato senza perdita di dati.")
 
