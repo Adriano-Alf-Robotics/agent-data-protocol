@@ -1,9 +1,32 @@
-"""ADPSession — dynamic LUT adattiva HPACK-style.
+"""ADPSession — Dynamic LUT adattiva HPACK-style per ADP.
 
-Mantiene una LUT dinamica condivisa tra agenti, sincronizzata via prefissi
-in-band nei messaggi ADP, persistita localmente.
+Mantiene una look-up table dinamica condivisa tra agenti, sincronizzata via
+prefissi in-band (`_lut_add={...}`, `_lut_reset=1`) nei messaggi ADP,
+persistita localmente in `~/.adp/lut_state.json` (override via parametro
+`path` o env `ADP_LUT_PATH`).
 
-Vedi spec: docs/superpowers/specs/2026-05-24-dynamic-lut-design.md
+Architettura: HPACK-style (RFC 7541). Eviction LRU bounded (default 256
+entries), deterministica side-local. Cost-benefit char-based decide se
+aggiungere un entry: candidato aggiunto solo se savings >= 0.
+
+Esempio uso base:
+
+    import adp
+
+    session = adp.ADPSession()  # carica/crea ~/.adp/lut_state.json
+
+    # Mittente A
+    msg = session.encode({
+        "user": {"id": 42, "role": "administrator", "dept": "engineering"},
+        "user2": {"id": 43, "role": "administrator", "dept": "engineering"},
+    })
+    # msg contiene _lut_add={_0=role;_1=administrator;...};u={...} ecc.
+
+    # Destinatario B (con la propria ADPSession)
+    obj = session.decode(msg)
+    # Lo stato LUT di entrambi è ora sincronizzato
+
+Spec: docs/superpowers/specs/2026-05-24-dynamic-lut-design.md
 """
 from __future__ import annotations
 
