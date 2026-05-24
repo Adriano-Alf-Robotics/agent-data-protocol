@@ -24,18 +24,22 @@ from adp import tpd
 from adp.db import ADPStore
 from adp import integrity
 from adp.integrity import sign, verify, is_signed, IntegrityError
-from adp.session import (  # noqa: E402
-    ADPSession,
-    ADPLUTSyncError,
-    ADPDiffSyncError,
-    apply_lut_updates,
-    encode_with_dyn_lut,
-)
+from adp.session import ADPSession, ADPLUTSyncError, ADPDiffSyncError
+from adp.lut import apply_lut_updates, encode_with_dyn_lut  # noqa: E402
 from adp.cost import TokenizerCostEstimator, estimate_cost
 try:
-    from adp import image
-except ImportError:
-    image = None  # type: ignore
+    from adp import image  # noqa: F401
+except ImportError as _img_err:
+    class _ImageStub:
+        """Stub helpful per quando Pillow non è installato."""
+        _err = str(_img_err)
+        def __getattr__(self, name):
+            raise ImportError(
+                f"adp.image richiede dipendenze opzionali. "
+                f"Installa con: pip install adp[bench]  "
+                f"(missing: {self._err})"
+            )
+    image = _ImageStub()
 
 __version__ = "0.2.0"
 

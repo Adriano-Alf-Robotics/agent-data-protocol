@@ -104,6 +104,21 @@ def test_hybrid_contains_thumb_and_hash() -> None:
     assert p["caption"] == "test"
 
 
+def test_image_module_attribute_error_helpful_if_missing():
+    """Se Pillow è installato (caso comune in dev), test skip; se assente,
+    accesso a adp.image.compress_for_llm deve sollevare ImportError chiaro."""
+    import adp
+    try:
+        import PIL  # noqa: F401
+        # Pillow presente: il test non si applica
+        return
+    except ImportError:
+        pass
+    # Pillow assente: verifica messaggio chiaro
+    with pytest.raises(ImportError, match="pip install adp"):
+        _ = adp.image.compress_for_llm  # type: ignore
+
+
 def test_adp_encode_decode_with_image_payload() -> None:
     src = _make_image(128)
     p = compress_for_llm(src, strategy="hybrid", caption="x")

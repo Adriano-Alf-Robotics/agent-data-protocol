@@ -34,7 +34,7 @@ DEFAULT_AGENT_LUT: dict[str, str] = {
     "msg_id": "mi",
     "from_agent": "fa",
     "to_agent": "ta",
-    "intent": "it",
+    "intent": "itn",
     "action": "ac",
     "reply_to": "rt",
     "timestamp": "ts",
@@ -66,14 +66,14 @@ DEFAULT_AGENT_LUT: dict[str, str] = {
     "step": "sp",
     "tool": "tl",
     "command": "cm",
-    "timeout_s": "to",
+    "timeout_s": "tmo",
     "context": "cx",
     "constraints": "cs",
     "previous_outputs": "po",
     "expected_reply": "ex",
     # user/contact
     "user": "u",
-    "users": "us",
+    "users": "uss",
     "email": "em",
     "url": "ur",
     "phone": "ph",
@@ -129,3 +129,58 @@ def _apply_with(obj: Any, inv: dict[str, str]) -> Any:
     if isinstance(obj, list):
         return [_apply_with(v, inv) for v in obj]
     return obj
+
+
+def apply_lut_updates(msg: str, lut: dict[str, str]) -> tuple[str, dict[str, str]]:
+    """Estrae prefissi _lut_reset/_lut_add da msg e ritorna (payload_pulito,
+    lut_aggiornata).
+
+    Helper stateless per integrazioni custom. Non valida né bumpa LRU.
+    """
+    from adp.session import ADPSession  # local import per evitare circular
+    temp = ADPSession(path=None, auto_save=False, max_entries=10_000)
+    temp._entries = dict(lut)
+    temp._inv = {v: k for k, v in lut.items()}
+    temp._lru_order = list(lut.keys())
+
+    rest = msg
+    while True:
+        match = temp._match_reserved_prefix(rest)
+        if match is None:
+            break
+        key, value_str, consumed = match
+        if key == "_lut_reset" and value_str == "1":
+            temp._apply_lut_reset()
+        elif key == "_lut_add":
+            temp._apply_lut_add(value_str)
+        rest = rest[consumed:]
+
+    return rest, dict(temp._entries)
+
+
+def encode_with_dyn_lut(
+    obj: Any,
+    dyn_lut: dict[str, str],
+    k_threshold: int = 2,
+    max_entries: int = 256,
+) -> tuple[str, dict[str, str]]:
+    """Encode obj usando dyn_lut. Ritorna (msg_con_prefix, lut_aggiornata)."""
+    from adp.session import ADPSession  # local import per evitare circular
+    temp = ADPSession(
+        path=None,
+        auto_save=False,
+        max_entries=max_entries,
+        k_threshold=k_threshold,
+    )
+    temp._entries = dict(dyn_lut)
+    temp._inv = {v: k for k, v in dyn_lut.items()}
+    temp._lru_order = list(dyn_lut.keys())
+    if dyn_lut:
+        max_id = max(
+            (int(a.lstrip("_")) for a in dyn_lut if a.startswith("_") and a[1:].isdigit()),
+            default=-1,
+        )
+        temp._next_alias_id = max_id + 1
+
+    msg = temp.encode(obj)
+    return msg, dict(temp._entries)

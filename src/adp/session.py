@@ -434,6 +434,7 @@ class ADPSession:
             text = messages.read_text(encoding="utf-8")
             messages = [line.strip() for line in text.splitlines() if line.strip()]
 
+        from adp.lut import apply_lut_updates  # local import per evitare circular
         cumulative_counts: dict[str, int] = {}
         for msg in messages:
             if isinstance(msg, str):
@@ -826,58 +827,5 @@ class ADPSession:
         self._caps_outbound_count = 0
 
 
-def apply_lut_updates(msg: str, lut: dict[str, str]) -> tuple[str, dict[str, str]]:
-    """Estrae prefissi _lut_reset/_lut_add da msg e ritorna (payload_pulito,
-    lut_aggiornata).
-
-    Helper stateless per integrazioni custom. Non valida né bumpa LRU.
-    """
-    temp = ADPSession(path=None, auto_save=False, max_entries=10_000)
-    temp._entries = dict(lut)
-    temp._inv = {v: k for k, v in lut.items()}
-    temp._lru_order = list(lut.keys())
-
-    rest = msg
-    while True:
-        match = temp._match_reserved_prefix(rest)
-        if match is None:
-            break
-        key, value_str, consumed = match
-        if key == "_lut_reset" and value_str == "1":
-            temp._apply_lut_reset()
-        elif key == "_lut_add":
-            temp._apply_lut_add(value_str)
-        rest = rest[consumed:]
-
-    return rest, dict(temp._entries)
-
-
-def encode_with_dyn_lut(
-    obj: Any,
-    dyn_lut: dict[str, str],
-    k_threshold: int = 2,
-    max_entries: int = 256,
-) -> tuple[str, dict[str, str]]:
-    """Encode obj usando dyn_lut. Ritorna (msg_con_prefix, lut_aggiornata)."""
-    temp = ADPSession(
-        path=None,
-        auto_save=False,
-        max_entries=max_entries,
-        k_threshold=k_threshold,
-    )
-    temp._entries = dict(dyn_lut)
-    temp._inv = {v: k for k, v in dyn_lut.items()}
-    temp._lru_order = list(dyn_lut.keys())
-    if dyn_lut:
-        max_id = max(
-            (int(a.lstrip("_")) for a in dyn_lut if a.startswith("_") and a[1:].isdigit()),
-            default=-1,
-        )
-        temp._next_alias_id = max_id + 1
-
-    msg = temp.encode(obj)
-    return msg, dict(temp._entries)
-
-
 __all__ = ["ADPSession", "ADPLUTSyncError", "ADPDiffSyncError", "DEFAULT_PATH",
-           "SCHEMA_VERSION", "apply_lut_updates", "encode_with_dyn_lut"]
+           "SCHEMA_VERSION"]

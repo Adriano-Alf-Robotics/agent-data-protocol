@@ -71,6 +71,20 @@ def test_lut_duplicate_alias() -> None:
         validate_lut({"a": "x", "b": "x"})
 
 
+def test_default_agent_lut_no_common_word_aliases():
+    """Guard: nessun alias in DEFAULT_AGENT_LUT può essere una parola inglese
+    standalone comune di 1-3 lettere (evita collision silenziosa con chiavi utente)."""
+    from adp.lut import DEFAULT_AGENT_LUT
+    forbidden = {"to", "in", "of", "at", "on", "by", "is", "as", "an",
+                 "the", "and", "or", "for", "key", "id", "if", "no", "ok",
+                 "be", "we", "us", "do", "go", "it", "me", "my"}
+    for fullname, alias in DEFAULT_AGENT_LUT.items():
+        assert alias not in forbidden, (
+            f"Alias {alias!r} (for {fullname!r}) è una parola inglese "
+            f"comune: rischio collision silenziosa con chiavi utente"
+        )
+
+
 def test_lut_savings_on_realistic_payload() -> None:
     """Encode a realistic agent payload with and without LUT, compare lengths."""
     obj = {

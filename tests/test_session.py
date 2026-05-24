@@ -306,7 +306,7 @@ def test_stats_reports_real_events():
 
 
 def test_apply_lut_updates_extracts_prefix():
-    from adp.session import apply_lut_updates
+    from adp.lut import apply_lut_updates
     msg = "_lut_add={_0=admin};u={i=42;r=_0}"
     payload_str, updated_lut = apply_lut_updates(msg, {})
     assert payload_str == "u={i=42;r=_0}"
@@ -314,7 +314,7 @@ def test_apply_lut_updates_extracts_prefix():
 
 
 def test_apply_lut_updates_handles_reset():
-    from adp.session import apply_lut_updates
+    from adp.lut import apply_lut_updates
     msg = "_lut_reset=1;u={i=42}"
     payload_str, updated_lut = apply_lut_updates(msg, {"_0": "old"})
     assert payload_str == "u={i=42}"
@@ -322,7 +322,7 @@ def test_apply_lut_updates_handles_reset():
 
 
 def test_encode_with_dyn_lut_returns_msg_and_updated_lut():
-    from adp.session import encode_with_dyn_lut
+    from adp.lut import encode_with_dyn_lut
     obj = {"a": {"role": "administrator"}, "b": {"role": "administrator"}}
     msg, new_lut = encode_with_dyn_lut(obj, {}, k_threshold=2, max_entries=256)
     assert "_lut_add" in msg
