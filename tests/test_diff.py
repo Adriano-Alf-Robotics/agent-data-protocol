@@ -122,3 +122,33 @@ def test_apply_diff_delete_missing_path_noop():
     diff = {"del": ["nonexistent.path"]}
     new = apply_diff(base, diff)
     assert new == {"a": 1}
+
+
+from adp.session import ADPSession
+from adp import ADPDiffSyncError  # nuovo export
+
+
+def test_diff_sync_error_carries_expected_and_got():
+    err = ADPDiffSyncError(expected="abc12345", got="def67890")
+    assert err.expected == "abc12345"
+    assert err.got == "def67890"
+    assert "abc12345" in str(err)
+    assert "def67890" in str(err)
+
+
+def test_session_diff_state_initialized():
+    s = ADPSession(path=None, auto_save=False)
+    assert s._last_sent_payload is None
+    assert s._last_sent_base_id is None
+    assert s._last_received_payload is None
+    assert s._last_received_base_id is None
+    # Default enable_diff True
+    assert s._enable_diff is True
+    assert s._diff_threshold == 0.7
+
+
+def test_session_diff_params_configurable():
+    s = ADPSession(path=None, auto_save=False,
+                   enable_diff=False, diff_threshold=0.5)
+    assert s._enable_diff is False
+    assert s._diff_threshold == 0.5

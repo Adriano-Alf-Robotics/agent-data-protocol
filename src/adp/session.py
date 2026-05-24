@@ -63,6 +63,17 @@ class ADPLUTSyncError(Exception):
         super().__init__(message or f"Alias dynamic LUT non risolvibile: {alias!r}")
 
 
+class ADPDiffSyncError(Exception):
+    """Sollevata quando il base_id dichiarato in _base= non match con lo state locale."""
+
+    def __init__(self, expected: str, got: str):
+        self.expected = expected
+        self.got = got
+        super().__init__(
+            f"Diff baseline mismatch: atteso {expected!r}, ricevuto {got!r}"
+        )
+
+
 DEFAULT_PATH = "~/.adp/lut_state.json"
 SCHEMA_VERSION = 1
 
@@ -82,6 +93,8 @@ class ADPSession:
         static_lut: dict[str, str] | None = None,
         k_threshold: int = 2,
         auto_save: bool = True,
+        enable_diff: bool = True,
+        diff_threshold: float = 0.7,
     ) -> None:
         # Path resolution
         if path is None:
@@ -108,6 +121,14 @@ class ADPSession:
             "miss_count": 0,
             "evictions": 0,
         }
+
+        # Differential encoding state (Est. 5)
+        self._enable_diff = enable_diff
+        self._diff_threshold = diff_threshold
+        self._last_sent_payload: Any = None
+        self._last_sent_base_id: str | None = None
+        self._last_received_payload: Any = None
+        self._last_received_base_id: str | None = None
 
         if self._path is not None and self._path.exists():
             self._load()
@@ -536,5 +557,5 @@ def encode_with_dyn_lut(
     return msg, dict(temp._entries)
 
 
-__all__ = ["ADPSession", "ADPLUTSyncError", "DEFAULT_PATH", "SCHEMA_VERSION",
-           "apply_lut_updates", "encode_with_dyn_lut"]
+__all__ = ["ADPSession", "ADPLUTSyncError", "ADPDiffSyncError", "DEFAULT_PATH",
+           "SCHEMA_VERSION", "apply_lut_updates", "encode_with_dyn_lut"]

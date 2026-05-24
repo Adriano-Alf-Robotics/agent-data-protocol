@@ -27,6 +27,7 @@ from adp.integrity import sign, verify, is_signed, IntegrityError
 from adp.session import (  # noqa: E402
     ADPSession,
     ADPLUTSyncError,
+    ADPDiffSyncError,
     apply_lut_updates,
     encode_with_dyn_lut,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "validate_lut",
     "ADPSession",
     "ADPLUTSyncError",
+    "ADPDiffSyncError",
     "apply_lut_updates",
     "encode_with_dyn_lut",
     "__version__",
