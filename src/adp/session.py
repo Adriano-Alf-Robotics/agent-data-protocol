@@ -139,6 +139,10 @@ class ADPSession:
         buffer_size = max(2 * tpd_promote_every, 1) if tpd_promote_every > 0 else 1
         self._tpd_buffer: deque[str] = deque(maxlen=buffer_size)
 
+        # Pending alias announcements (da TPD promotion o altre fonti out-of-band)
+        # Verranno incluse nel _lut_add del prossimo encode.
+        self._pending_announcements: dict[str, str] = {}
+
         # Capability negotiation state (Est. 2)
         self._announce_caps = announce_caps
         self._caps_timeout_msgs = caps_timeout_msgs
@@ -508,11 +512,17 @@ class ADPSession:
 
         # 6. Compone messaggio finale
         payload_adp = adp.encode(substituted, key_lut=self._static_lut or None)
-        if not new_aliases:
+
+        # Merge pending announcements (da TPD promotion) con new_aliases
+        all_aliases = {**self._pending_announcements, **new_aliases}
+        # Clear pending: queste vengono annunciate ora
+        self._pending_announcements.clear()
+
+        if not all_aliases:
             return payload_adp
 
         prefix_pairs = ";".join(f"{a}={self._quote_if_needed(f)}"
-                                for a, f in new_aliases.items())
+                                for a, f in all_aliases.items())
         prefix = f"_lut_add={{{prefix_pairs}}};"
         return prefix + payload_adp
 
@@ -790,6 +800,8 @@ class ADPSession:
                 break
             alias = self._add_entry(phrase)
             added.append(alias)
+            # Mark for announcement nel prossimo encode
+            self._pending_announcements[alias] = phrase
         return added
 
     def stats(self) -> dict:
