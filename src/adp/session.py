@@ -195,7 +195,7 @@ class ADPSession:
         return counts
 
     def _select_candidates(self, counts: dict[str, int]) -> dict[str, int]:
-        """Filtra candidati: soglia K, non in static LUT, saving char positivo."""
+        """Filtra candidati: soglia K, non in static LUT, saving char non-negativo (break-even incluso)."""
         selected: dict[str, int] = {}
         next_id = self._next_alias_id
         for fullname, count in counts.items():
