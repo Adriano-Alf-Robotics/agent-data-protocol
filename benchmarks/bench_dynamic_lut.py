@@ -177,6 +177,38 @@ def run() -> None:
         assert decoded == m, f"round-trip rotto (full stack) msg {i}"
         full_stack_tokens += _tok(encoded)
 
+    # Warm start: pre-warm da prima metà della conversazione, misura solo seconda metà
+    msgs_warmup = msgs[: len(msgs) // 2]
+    msgs_measure = msgs[len(msgs) // 2 :]
+
+    a_warm = adp.ADPSession(path=None, auto_save=False,
+                             static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=True)
+    b_warm = adp.ADPSession(path=None, auto_save=False,
+                             static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=True)
+    # Pre-warm: entrambe le sessions imparano dal corpus di prima metà
+    a_warm.warmup(msgs_warmup)
+    b_warm.warmup(msgs_warmup)
+    warm_start_tokens = 0
+    for i, m in enumerate(msgs_measure):
+        sender, receiver = (a_warm, b_warm) if i % 2 == 0 else (b_warm, a_warm)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (warm start) msg {i}"
+        warm_start_tokens += _tok(encoded)
+
+    # Equivalente "cold" sulla seconda metà per confronto onesto
+    a_cold_half = adp.ADPSession(path=None, auto_save=False,
+                                   static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=True)
+    b_cold_half = adp.ADPSession(path=None, auto_save=False,
+                                   static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=True)
+    cold_half_tokens = 0
+    for i, m in enumerate(msgs_measure):
+        sender, receiver = (a_cold_half, b_cold_half) if i % 2 == 0 else (b_cold_half, a_cold_half)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (cold half) msg {i}"
+        cold_half_tokens += _tok(encoded)
+
     baseline = json_tokens
     print(f"\n{'='*70}")
     print(f"Benchmark: 20-message agent conversation")
@@ -207,6 +239,20 @@ def run() -> None:
     print(f"{'ADP + dyn LUT + diff':<35} {delta_toon(dyn_diff_tokens):>15}")
     print(f"{'ADP + full stack':<35} {delta_toon(full_stack_tokens):>15}")
     print(f"{'-'*70}\n")
+
+    print(f"{'-'*70}")
+    print(f"\nSotto-benchmark seconda metà (10 msg) — warm vs cold:")
+    print(f"{'-'*70}")
+    half_baseline = sum(_tok(encode_json_min(m)) for m in msgs_measure)
+    print(f"{'JSON-min (10 msg)':<35} {fmt(half_baseline, half_baseline)}")
+    print(f"{'full stack cold (10 msg)':<35} {fmt(cold_half_tokens, half_baseline)}")
+    print(f"{'full stack WARM (10 msg)':<35} {fmt(warm_start_tokens, half_baseline)}")
+    print(f"{'-'*70}")
+    print(f"Δ warm vs cold sulla seconda metà:")
+    if cold_half_tokens > 0:
+        cold_delta = (cold_half_tokens - warm_start_tokens) / cold_half_tokens * 100
+        print(f"  warm risparmia {cold_delta:.1f}% dei token vs cold start")
+    print()
 
     # Statistiche dyn LUT
     print(f"Statistiche dynamic LUT (cold start):")
