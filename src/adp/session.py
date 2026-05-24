@@ -334,7 +334,10 @@ class ADPSession:
             else:
                 payload = adp.encode(obj)
             self._caps_outbound_count += 1
-            return caps_prefix + payload
+            final_msg = caps_prefix + payload
+            if self._tpd_promote_every > 0:
+                self._tpd_buffer.append(final_msg)
+            return final_msg
 
         full_msg = self._encode_full_with_lut(obj)
 
@@ -352,7 +355,10 @@ class ADPSession:
 
         chosen = diff_msg if diff_msg is not None else full_msg
         self._caps_outbound_count += 1
-        return caps_prefix + chosen
+        final_msg = caps_prefix + chosen
+        if self._tpd_promote_every > 0:
+            self._tpd_buffer.append(final_msg)
+        return final_msg
 
     def _build_caps_prefix(self) -> str:
         """Costruisce il prefix _caps= se va annunciato, '' altrimenti.
