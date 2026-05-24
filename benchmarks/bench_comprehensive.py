@@ -137,15 +137,17 @@ def run_workload(
                                 announce_caps=False, enable_diff=False,
                                 tpd_promote_every=0),
     )
+    # NOTA: static_lut omesso — DEFAULT_AGENT_LUT aliasa chiavi come
+    # 'timeout_s'→'to' che collidono con chiavi utente generiche (es.
+    # payload con key 'to' in multi_agent_broadcast). Per workload
+    # arbitrari il dynamic LUT + diff fa tutto il lavoro.
     _safe_session(
         "adp_full_stack",
         lambda: adp.ADPSession(path=None, auto_save=False,
-                                static_lut=adp.DEFAULT_AGENT_LUT,
                                 announce_caps=False, enable_diff=True,
                                 tpd_promote_every=0,
                                 cost_estimator=adp.TokenizerCostEstimator()),
         lambda: adp.ADPSession(path=None, auto_save=False,
-                                static_lut=adp.DEFAULT_AGENT_LUT,
                                 announce_caps=False, enable_diff=True,
                                 tpd_promote_every=0,
                                 cost_estimator=adp.TokenizerCostEstimator()),
