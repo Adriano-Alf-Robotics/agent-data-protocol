@@ -24,6 +24,9 @@ di dati.
 | Tabella omogenea (it) | 333 | 164 | **+50,8%** |
 | Lista contatti con URL/email | 145 | 94 | **+35,2%** |
 | Tabelle con cells annidate | 100 | 75 | **+25,0%** |
+| Conversazione 20 msg agent-to-agent (full stack) | 2079 | **897** | **+56,9%** |
+
+L'ultima riga è ottenuta con `ADPSession` (dynamic LUT HPACK-style + differential encoding inter-message). Sullo stesso payload, **TOON** richiede 2249 token: ADP è **2,5× più economico di TOON** in scenari multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding) per dettagli.
 
 ## Indice
 
@@ -33,15 +36,16 @@ di dati.
 4. [Sintassi in pillole](#sintassi-in-pillole)
 5. [Convertitori](#convertitori)
 6. [Integrazione con agenti AI](#integrazione-con-agenti-ai)
-7. [Riduzione token misurata](#riduzione-token-misurata)
-8. [Esempi a confronto](#esempi-a-confronto)
-9. [Immagini](#immagini)
-10. [Usare ADP in Claude Code](#usare-adp-in-claude-code)
-11. [Integrità — sign / verify](#integrità--sign--verify)
-12. [Struttura del progetto](#struttura-del-progetto)
-13. [Sviluppo e test](#sviluppo-e-test)
-14. [Roadmap](#roadmap)
-15. [Licenza](#licenza)
+7. [Dynamic LUT (HPACK-style) + differential encoding](#dynamic-lut-hpack-style--differential-encoding)
+8. [Riduzione token misurata](#riduzione-token-misurata)
+9. [Esempi a confronto](#esempi-a-confronto)
+10. [Immagini](#immagini)
+11. [Usare ADP in Claude Code](#usare-adp-in-claude-code)
+12. [Integrità — sign / verify](#integrità--sign--verify)
+13. [Struttura del progetto](#struttura-del-progetto)
+14. [Sviluppo e test](#sviluppo-e-test)
+15. [Roadmap](#roadmap)
+16. [Licenza](#licenza)
 
 ---
 
@@ -284,6 +288,167 @@ Vincoli LUT: chiavi e sigle devono essere identificatori validi
 `[A-Za-z_][A-Za-z0-9_-]*`; le sigle non possono coincidere con i
 letterali riservati (`~`, `0`, `1`, `0i`, `1i`). `adp.validate_lut(lut)`
 verifica entrambi i requisiti.
+
+## Dynamic LUT (HPACK-style) + differential encoding
+
+La LUT statica richiede che mittente e destinatario condividano in anticipo
+lo stesso dizionario di sigle. Per scenari dove gli agenti non possono
+coordinarsi a priori, oppure dove il vocabolario è specifico del dominio di
+conversazione, ADP offre `ADPSession`: una **LUT dinamica adattiva
+HPACK-style** (modellata sull'header compression di HTTP/2, RFC 7541) che
+**cresce in modo sincronizzato durante la sessione** tramite update in-band,
+e un **differential encoding inter-message** che invia solo il delta
+rispetto al messaggio precedente quando conviene.
+
+Le due tecniche sono ortogonali e combinabili: sullo stesso workload da 20
+messaggi agent-to-agent, la combinazione `static LUT + dynamic LUT + diff
+encoding` (full stack) riduce i token del **56,9% rispetto a JSON-min** e
+del **60,1% rispetto a TOON** (best competitor).
+
+### Uso base
+
+```python
+import adp
+
+session = adp.ADPSession()   # carica/crea ~/.adp/lut_state.json
+
+# Mittente A
+msg = session.encode({
+    "user": {"id": 42, "role": "administrator", "dept": "engineering"},
+    "user2": {"id": 43, "role": "administrator", "dept": "engineering"},
+})
+# msg contiene un prefisso _lut_add={...} con le nuove sigle dinamiche,
+# poi il payload sostituito con quelle sigle.
+
+# Destinatario B (con la propria ADPSession)
+obj = session.decode(msg)
+# Lo stato LUT di entrambi è ora sincronizzato dopo la decodifica.
+```
+
+Lo state cresce ad ogni messaggio scambiato. Persistenza locale automatica
+in `~/.adp/lut_state.json` (override via parametro `path=` o env
+`ADP_LUT_PATH`). LRU bounded a 256 entry di default. Tutto stdlib, zero
+dipendenze nuove.
+
+### Sintassi in-band
+
+ADPSession emette tre prefissi top-level riservati all'inizio del messaggio:
+
+| Prefisso | Significato |
+|---|---|
+| `_lut_add={alias=fullname;...}` | aggiunge nuove entry alla LUT dinamica |
+| `_lut_reset=1` | pulisce completamente la LUT dinamica del receiver |
+| `_base=ID;_diff={set=...;del=[...]}` | applica un diff al baseline ID |
+
+Gli alias dinamici usano il namespace riservato `_N` (underscore + cifre),
+disgiunto dalle short letters della LUT statica. Eviction LRU side-local
+deterministica: sender e receiver evictono identicamente perché osservano
+le stesse inserzioni e gli stessi USI.
+
+### Differential encoding
+
+Quando due messaggi consecutivi nella stessa direzione condividono la
+maggior parte dei campi (pattern tipico: status report, incremental result,
+state update), `ADPSession` calcola il diff e invia solo le modifiche:
+
+```python
+sender = adp.ADPSession()
+receiver = adp.ADPSession()
+
+msg1 = sender.encode({"task_id": "t1", "user": {"id": 42, "role": "administrator"}})
+receiver.decode(msg1)
+
+# Secondo messaggio: cambia solo task_id, user resta uguale
+msg2 = sender.encode({"task_id": "t2", "user": {"id": 42, "role": "administrator"}})
+# msg2 ≈ "_base=a3f2;_diff={set={task_id=t2}};"
+# molto più corto del payload completo
+receiver.decode(msg2)
+```
+
+L'encoder valuta automaticamente quando emettere diff: solo se il diff
+codificato è inferiore al `diff_threshold * len(full_msg)` (default 0.7).
+Per cambi massivi, fallback automatico a full encoding. Recovery dopo
+desincronizzazione tramite `session.encode_full(obj)`.
+
+### Sincronizzazione e recovery
+
+Sender e receiver mantengono stati indipendenti che si allineano per
+costruzione: ogni messaggio porta gli update LUT necessari per la sua
+decodifica e (per il diff) un base_id che identifica univocamente il
+payload precedente. Se il receiver non riconosce il base_id (perché ha
+perso lo state, ha appena riavviato, o ha ricevuto messaggi fuori
+ordine), solleva `ADPDiffSyncError`. L'app intercetta l'errore e chiede
+al sender un full re-send via `encode_full()`.
+
+```python
+try:
+    obj = receiver.decode(msg)
+except adp.ADPDiffSyncError:
+    # Recovery: chiedi al mittente un full re-send
+    request_full_resend()
+except adp.ADPLUTSyncError:
+    # Alias dinamico sconosciuto: stessa logica di recovery
+    request_full_resend()
+```
+
+### Confronto static vs dynamic vs full stack
+
+Benchmark su 20 messaggi agent-to-agent (planner ↔ executor) con
+tokenizer `cl100k_base`. Pattern realistico request/reply, payload
+strutturato (annidamento dict + lista di eventi):
+
+| Formato | Token totali | Δ vs JSON | Δ vs TOON |
+|---|---:|---:|---:|
+| JSON-min | 2079 | baseline | +7,6% |
+| **TOON** | **2249** | **−8,2%** | baseline |
+| ADP base (no LUT) | 1903 | +8,5% | +15,4% |
+| ADP + static LUT (`DEFAULT_AGENT_LUT`) | 1833 | +11,8% | +18,5% |
+| ADP + dynamic LUT (cold) | 2037 | +2,0% | +9,4% |
+| ADP + dynamic + static LUT | 1856 | +10,7% | +17,5% |
+| ADP + dynamic LUT + diff encoding | 943 | +54,6% | +58,1% |
+| **ADP full stack (static + dynamic + diff)** | **897** | **+56,9%** | **+60,1%** |
+
+Il guadagno principale arriva dal diff encoding: su pattern request/reply
+con payload simili tra messaggi successivi, il delta è una frazione minima
+del payload completo. La dynamic LUT cold-start da sola non è
+particolarmente competitiva perché la LUT statica copre già la maggior
+parte dei pattern frequenti — il vero valore aggiunto è la combinazione
+con il diff e la specializzazione dinamica sul vocabolario di sessione.
+
+Per rigenerare il benchmark:
+
+```bash
+uv run --with toon-py --with tiktoken python -m benchmarks.bench_dynamic_lut
+```
+
+### Quando usare cosa
+
+| Scenario | Configurazione consigliata |
+|---|---|
+| Singolo messaggio, agenti non coordinati | ADP base |
+| Agenti che condividono codebase (pre-share LUT) | ADP + static LUT (`DEFAULT_AGENT_LUT`) |
+| Sessione lunga, vocabolario dominio-specifico | ADP + dynamic LUT |
+| Pattern request/reply, payload simili tra msg | ADP + diff encoding |
+| **Workload misto, max risparmio** | **ADPSession full stack** |
+
+### Parametri principali
+
+```python
+session = adp.ADPSession(
+    path="~/.adp/lut_state.json",  # None = in-memory; env ADP_LUT_PATH override
+    max_entries=256,               # bound LRU
+    static_lut=adp.DEFAULT_AGENT_LUT,
+    k_threshold=2,                 # quante occorrenze in msg per aggiungere entry
+    enable_diff=True,              # disabilita per messaggi stateless
+    diff_threshold=0.7,            # diff usato solo se len < 0.7 * full
+    auto_save=True,                # persistenza atexit
+)
+```
+
+API completa: `encode`, `decode`, `encode_full`, `encode_reset`, `reset`,
+`save`, `stats`. Helper stateless: `apply_lut_updates`, `encode_with_dyn_lut`.
+Vedi il modulo `src/adp/session.py` e la spec di design in
+[`docs/superpowers/specs/2026-05-24-dynamic-lut-design.md`](docs/superpowers/specs/2026-05-24-dynamic-lut-design.md).
 
 ## Riduzione token misurata
 
@@ -831,10 +996,17 @@ La libreria core non ha dipendenze runtime oltre alla stdlib.
 
 ## Roadmap
 
-- **v0.3** — envelope opzionale (`from`, `to`, `id`, `intent`, `reply_to`)
+- **v0.3 (corrente)** — **dynamic LUT HPACK-style + differential encoding**:
+  `ADPSession` con state evolutivo persistito, sincronizzazione in-band,
+  diff inter-message. Riduce i token del 60% rispetto a TOON su workload
+  multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding).
+- **v0.3.5 (in lavorazione)** — estensioni `ADPSession`: tokenizer-aware
+  cost estimation, capability negotiation tra agenti, pre-warm da corpus
+  passato, auto-promozione TPD→dynamic LUT.
+- **v0.4** — envelope opzionale (`from`, `to`, `id`, `intent`, `reply_to`)
   per protocolli inter-agente espliciti.
-- **v0.4** — schema/contract opzionale, codegen Pydantic.
-- **v0.5** — implementazione di riferimento in TypeScript.
+- **v0.5** — schema/contract opzionale, codegen Pydantic.
+- **v0.6** — implementazione di riferimento in TypeScript.
 
 ## Licenza
 
