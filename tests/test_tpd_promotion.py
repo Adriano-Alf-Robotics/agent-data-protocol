@@ -85,3 +85,50 @@ def test_run_tpd_promotion_respects_max_per_run():
 
     added = s._run_tpd_promotion()
     assert len(added) <= 2
+
+
+def test_encode_triggers_promotion_every_n():
+    """Ogni `tpd_promote_every` send, encode() esegue automaticamente promotion.
+    Verifica indiretta: no exception, sistema continua a funzionare."""
+    s = ADPSession(path=None, auto_save=False, k_threshold=2,
+                    tpd_promote_every=3,
+                    announce_caps=False)
+    s.encode({"a": 1})
+    s.encode({"b": 2})
+    s.encode({"c": 3})  # triggera promotion (3 % 3 == 0)
+    # No exception → OK
+    assert True
+
+
+def test_encode_promotion_disabled_when_every_zero():
+    """tpd_promote_every=0: encode mai triggera promotion."""
+    s = ADPSession(path=None, auto_save=False, tpd_promote_every=0,
+                    announce_caps=False)
+    for _ in range(20):
+        s.encode({"a": 1})
+    # Buffer vuoto perché disabilitato
+    assert len(s._tpd_buffer) == 0
+
+
+def test_encode_triggers_promotion_at_correct_count(monkeypatch):
+    """Spy: verifica che _run_tpd_promotion sia chiamata al 3° send."""
+    s = ADPSession(path=None, auto_save=False, tpd_promote_every=3,
+                    announce_caps=False)
+    call_count = []
+    original = s._run_tpd_promotion
+    def spy():
+        call_count.append(s._caps_outbound_count)
+        return original()
+    monkeypatch.setattr(s, "_run_tpd_promotion", spy)
+
+    s.encode({"a": 1})
+    s.encode({"b": 2})
+    s.encode({"c": 3})
+    # Promotion deve essere chiamata UNA volta a counter=3
+    assert call_count == [3]
+
+    s.encode({"d": 4})
+    s.encode({"e": 5})
+    s.encode({"f": 6})
+    # Seconda promotion a counter=6
+    assert call_count == [3, 6]

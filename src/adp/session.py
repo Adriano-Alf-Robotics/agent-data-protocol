@@ -337,6 +337,8 @@ class ADPSession:
             final_msg = caps_prefix + payload
             if self._tpd_promote_every > 0:
                 self._tpd_buffer.append(final_msg)
+                if self._caps_outbound_count % self._tpd_promote_every == 0:
+                    self._run_tpd_promotion()
             return final_msg
 
         full_msg = self._encode_full_with_lut(obj)
@@ -358,6 +360,8 @@ class ADPSession:
         final_msg = caps_prefix + chosen
         if self._tpd_promote_every > 0:
             self._tpd_buffer.append(final_msg)
+            if self._caps_outbound_count % self._tpd_promote_every == 0:
+                self._run_tpd_promotion()
         return final_msg
 
     def _build_caps_prefix(self) -> str:
