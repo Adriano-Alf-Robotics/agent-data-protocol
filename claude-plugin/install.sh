@@ -36,25 +36,37 @@ fi
 ln -s "${PLUGIN_DIR}" "${TARGET}"
 echo "Symlink created: ${TARGET} -> ${PLUGIN_DIR}"
 
-# Update installed_plugins.json (best-effort, preserves other entries)
-if [ ! -f "${INSTALLED_JSON}" ]; then
-    cat > "${INSTALLED_JSON}" <<EOF
-{
-  "local/${PLUGIN_NAME}": "${PLUGIN_VERSION}"
-}
-EOF
-    echo "Created ${INSTALLED_JSON}"
-else
-    python3 - <<PYEOF
+# Update installed_plugins.json (v2 nested format, preserves other entries)
+python3 - <<PYEOF
 import json
+from datetime import datetime
 from pathlib import Path
+
 p = Path("${INSTALLED_JSON}")
-data = json.loads(p.read_text())
-data["local/${PLUGIN_NAME}"] = "${PLUGIN_VERSION}"
+now_iso = datetime.utcnow().isoformat(timespec="milliseconds") + "Z"
+entry = {
+    "scope": "user",
+    "installPath": "${TARGET}",
+    "version": "${PLUGIN_VERSION}",
+    "installedAt": now_iso,
+    "lastUpdated": now_iso,
+}
+
+if p.exists():
+    data = json.loads(p.read_text())
+    # Migra eventuali entry vecchio formato top-level
+    legacy_key = "local/${PLUGIN_NAME}"
+    if legacy_key in data:
+        del data[legacy_key]
+    data.setdefault("version", 2)
+    data.setdefault("plugins", {})
+else:
+    data = {"version": 2, "plugins": {}}
+
+data["plugins"]["${PLUGIN_NAME}@local"] = [entry]
 p.write_text(json.dumps(data, indent=2) + "\n")
 print(f"Updated {p}")
 PYEOF
-fi
 
 echo ""
 echo "ADP plugin installed. Restart Claude Code to activate it."
