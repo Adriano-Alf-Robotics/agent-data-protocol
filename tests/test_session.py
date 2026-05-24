@@ -270,3 +270,36 @@ def test_decode_lut_reset_clears_state():
     assert s._entries == {}
     assert s._lru_order == []
     assert out == {"id": 42}
+
+
+def test_encode_reset_emits_reset_prefix():
+    s = ADPSession(path=None, auto_save=False)
+    s._add_entry("admin")
+    s._add_entry("dev")
+    msg = s.encode_reset({"id": 1})
+    assert msg.startswith("_lut_reset=1;")
+    # Anche lato locale lo state è pulito (encode_reset pulisce SENDER)
+    assert s._entries == {}
+
+
+def test_reset_clears_only_local_state():
+    s = ADPSession(path=None, auto_save=False)
+    s._add_entry("admin")
+    assert len(s._entries) == 1
+    s.reset()
+    assert s._entries == {}
+    assert s._lru_order == []
+    # next_alias_id NON resettato
+    assert s._next_alias_id == 1
+
+
+def test_stats_reports_real_events():
+    a = ADPSession(path=None, auto_save=False)
+    b = ADPSession(path=None, auto_save=False)
+    obj = {"x": {"role": "administrator", "k": "valuevalue"},
+           "y": {"role": "administrator", "k": "valuevalue"}}
+    msg = a.encode(obj)
+    b.decode(msg)
+    st = b.stats()
+    assert st["entries_count"] >= 1
+    assert st["hit_count"] >= 2  # almeno role o administrator espanso 2 volte

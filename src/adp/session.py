@@ -417,6 +417,32 @@ class ADPSession:
             raise ADPLUTSyncError(token)
         return token
 
+    def reset(self) -> None:
+        """Pulisci stato locale. NON propaga al receiver (usa encode_reset)."""
+        self._entries.clear()
+        self._inv.clear()
+        self._lru_order.clear()
+
+    def encode_reset(self, obj: Any) -> str:
+        """Encode forzando _lut_reset=1 nel prefix.
+
+        Pulisce ANCHE lo stato locale (mittente e destinatario allineati).
+        Il payload risultante non usa alias dynamic.
+        """
+        self.reset()
+        payload = adp.encode(obj, key_lut=self._static_lut or None)
+        return "_lut_reset=1;" + payload
+
+    def stats(self) -> dict:
+        """Dict diagnostico."""
+        return {
+            "entries_count": len(self._entries),
+            "max_entries": self._max_entries,
+            "hit_count": self._stats["hit_count"],
+            "miss_count": self._stats["miss_count"],
+            "evictions": self._stats["evictions"],
+        }
+
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "DEFAULT_PATH", "SCHEMA_VERSION",
            "apply_lut_updates", "encode_with_dyn_lut"]
