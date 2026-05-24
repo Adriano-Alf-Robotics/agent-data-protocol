@@ -403,3 +403,11 @@ def test_persistence_after_long_session(tmp_path):
     s2 = ADPSession(path=path, max_entries=32, auto_save=False)
     assert s2._entries == entries_before
     assert s2._lru_order == lru_before
+
+
+def test_miss_count_increments_on_sync_error():
+    s = ADPSession(path=None, auto_save=False)
+    msg = "_99={id=1}"  # _99 non in lut
+    with pytest.raises(ADPLUTSyncError):
+        s.decode(msg)
+    assert s.stats()["miss_count"] == 1

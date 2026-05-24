@@ -26,6 +26,19 @@ Esempio uso base:
     obj = session.decode(msg)
     # Lo stato LUT di entrambi è ora sincronizzato
 
+**IMPORTANTE — namespace alias riservato:**
+
+Gli alias dynamic LUT usano il pattern `_N` (underscore seguito da soli
+digit). Questo namespace è RISERVATO: chiavi/valori utente con questo
+pattern (es. `{"_0": "literal"}`) sono ambigui e producono
+`ADPLUTSyncError` al decode su sessione senza l'alias corrispondente.
+
+Soluzioni:
+- Non usare chiavi/valori che matchano `_\\d+` nei payload utente
+- Per messaggi che devono coesistere con sistemi terzi che usano tale
+  pattern, decodificare con `adp.decode()` diretto (no session) o con
+  `session.encode(obj, no_lut=True)` + `adp.decode()` lato receiver
+
 Spec: docs/superpowers/specs/2026-05-24-dynamic-lut-design.md
 """
 from __future__ import annotations
@@ -37,7 +50,7 @@ import os
 import re
 import tempfile
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import adp
 
@@ -296,7 +309,7 @@ class ADPSession:
         """Quote un valore se contiene caratteri ADP-speciali."""
         if not s:
             return '""'
-        if re.search(r"[\s,;=\[\]\{\}|\"#&~]", s):
+        if re.search(r"[\s,;=\[\]\{\}|\"#&~\\\\]", s):
             escaped = s.replace("\\", "\\\\").replace('"', '\\"')
             return f'"{escaped}"'
         return s
@@ -398,7 +411,9 @@ class ADPSession:
                 raise adp.ADPParseError(
                     f"_lut_add entry malformed: {alias!r}={fullname!r}")
             if alias in self._entries:
-                continue  # idempotente
+                continue  # idempotente sull'alias
+            if fullname in self._inv:
+                continue  # fullname già mappato a un alias diverso, skip per evitare orfani
             if len(self._entries) >= self._max_entries:
                 self._evict_lru()
             self._entries[alias] = fullname
@@ -437,6 +452,7 @@ class ADPSession:
                 self._stats["hit_count"] += 1
                 self._mark_used(token)
                 return self._entries[token]
+            self._stats["miss_count"] += 1
             raise ADPLUTSyncError(token)
         return token
 
