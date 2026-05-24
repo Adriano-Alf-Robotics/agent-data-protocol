@@ -41,7 +41,7 @@ except ImportError as _img_err:
             )
     image = _ImageStub()
 
-__version__ = "0.2.0"
+__version__ = "0.3.5"
 
 __all__ = [
     "encode",

@@ -8,7 +8,7 @@ set -euo pipefail
 
 PLUGIN_DIR="$(cd "$(dirname "$0")" && pwd)"
 PLUGIN_NAME="adp"
-PLUGIN_VERSION="0.2.0"
+PLUGIN_VERSION="0.3.5"
 
 CLAUDE_PLUGINS="${HOME}/.claude/plugins"
 CACHE_DIR="${CLAUDE_PLUGINS}/cache"

@@ -7,7 +7,7 @@
 
 **A lossless, aggressively token-efficient text format for communication between AI agents.**
 
-ADP (version 0.2) is a Python library that defines and implements a small
+ADP (version 0.3.5) is a Python library that defines and implements a small
 serialization language designed specifically for message exchange between
 language models. It is not intended to be read by a human at a glance: that
 is the job of the converters to readable Markdown and canonical JSON.

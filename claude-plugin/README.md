@@ -47,16 +47,16 @@ Edit `~/.claude/plugins/installed_plugins.json` by adding:
 
 ```json
 {
-  "local/adp": "0.2.0"
+  "local/adp": "0.3.5"
 }
 ```
 
 ### Method 2 — direct copy
 
 ```bash
-mkdir -p ~/.claude/plugins/cache/adp/0.2.0
+mkdir -p ~/.claude/plugins/cache/adp/0.3.5
 cp -r /path/to/GoalLanguageAgents/claude-plugin/* \
-      ~/.claude/plugins/cache/adp/0.2.0/
+      ~/.claude/plugins/cache/adp/0.3.5/
 ```
 
 ### Method 3 — automated script
