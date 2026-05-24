@@ -308,6 +308,26 @@ class ADPSession:
 
         return diff_msg if diff_msg is not None else full_msg
 
+    def encode_full(self, obj: Any) -> str:
+        """Forza encoding completo (no diff). Emette _diff_reset=1 al receiver.
+
+        Reset locale del baseline diff state, poi encode normale (incluso
+        dynamic LUT). Utile per recovery dopo ADPDiffSyncError o reset
+        esplicito di sincronizzazione.
+        """
+        # Resetta diff state locale
+        self._last_sent_payload = None
+        self._last_sent_base_id = None
+
+        # Encode full (passa per _encode_full_with_lut ma con prefix reset)
+        full_msg = self._encode_full_with_lut(obj)
+
+        # Aggiorna baseline col nuovo payload
+        self._last_sent_payload = obj
+        self._last_sent_base_id = self._compute_base_id(obj)
+
+        return "_diff_reset=1;" + full_msg
+
     def _encode_full_with_lut(self, obj: Any) -> str:
         """Estrae la logica esistente di encode (count/select/substitute/prefix)."""
         # 1. Conta candidati

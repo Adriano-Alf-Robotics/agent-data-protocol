@@ -271,3 +271,35 @@ def test_decode_diff_reset_clears_baseline():
     # Reset
     s.decode("_diff_reset=1;a=1")
     assert s._last_received_payload == {"a": 1}  # nuovo baseline (post-reset)
+
+
+def test_encode_full_ignores_baseline():
+    s = ADPSession(path=None, auto_save=False)
+    s.encode({"a": 1})
+    # Anche con baseline disponibile, encode_full produce full + emette _diff_reset
+    msg = s.encode_full({"a": 1, "b": 2})
+    assert "_diff_reset=1" in msg
+    assert "_base=" not in msg
+    assert "_diff={" not in msg
+
+
+def test_encode_full_resets_local_baseline():
+    s = ADPSession(path=None, auto_save=False)
+    s.encode({"a": 1})
+    s.encode_full({"a": 1, "b": 2})
+    # Baseline locale aggiornato col nuovo payload
+    assert s._last_sent_payload == {"a": 1, "b": 2}
+    assert s._last_sent_base_id is not None
+
+
+def test_encode_full_then_decode_clears_receiver_baseline():
+    sender = ADPSession(path=None, auto_save=False)
+    receiver = ADPSession(path=None, auto_save=False)
+    msg1 = sender.encode({"a": 1, "b": 2})
+    receiver.decode(msg1)
+    # Sender forza full
+    msg2 = sender.encode_full({"x": 1})
+    out = receiver.decode(msg2)
+    assert out == {"x": 1}
+    # Receiver baseline ora == {"x": 1}
+    assert receiver._last_received_payload == {"x": 1}
