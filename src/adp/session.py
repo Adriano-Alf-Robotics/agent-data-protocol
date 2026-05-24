@@ -328,6 +328,85 @@ class ADPSession:
 
         return "_diff_reset=1;" + full_msg
 
+    def warmup(self, messages, max_entries: int | None = None) -> int:
+        """Pre-popola la dynamic LUT da conversazioni passate.
+
+        Args:
+            messages: corpus di partenza. Tre formati accettati:
+                - Iterable[dict]: payload già decodificati (path veloce)
+                - Iterable[str]: raw ADP strings (decodificati internamente,
+                  prefissi di sessione `_lut_add`/`_lut_reset`/`_base`/`_diff`
+                  ignorati via `apply_lut_updates`)
+                - Path: file newline-delimited (una riga = un raw ADP msg)
+            max_entries: cap effettivo per questo warmup (default: usa
+                il `max_entries` della sessione). Il numero di entry totali
+                non supera mai `min(session.max_entries, max_entries)`.
+
+        Returns:
+            Numero di nuove entry aggiunte alla dynamic LUT.
+
+        Algoritmo:
+            1. Itera sui messaggi (decoding implicito per str/Path).
+            2. Conta occorrenze cumulative di chiavi dict e valori string scalari.
+            3. Per ogni candidato con count >= k_threshold, non in static LUT,
+               non già in dynamic LUT, e con cost-benefit char-based positivo:
+               aggiunge un'entry tramite `_add_entry`.
+            4. Rispetta `min(self._max_entries, max_entries)` come cap globale.
+            5. Idempotente: ri-eseguire stesso input non duplica entry
+               (i candidati già presenti vengono saltati).
+        """
+        if isinstance(messages, Path):
+            text = messages.read_text(encoding="utf-8")
+            messages = [line.strip() for line in text.splitlines() if line.strip()]
+
+        cumulative_counts: dict[str, int] = {}
+        for msg in messages:
+            if isinstance(msg, str):
+                # Rimuovi eventuali prefissi sessione, poi decoda payload
+                payload_str, _ = apply_lut_updates(msg, {})
+                if not payload_str:
+                    continue
+                try:
+                    obj = adp.decode(payload_str,
+                                     key_lut=self._static_lut or None)
+                except adp.ADPParseError:
+                    continue  # msg malformato, skippa
+            else:
+                obj = msg
+            self._count_candidates(obj, cumulative_counts)
+
+        # Cap effettivo
+        if max_entries is None:
+            cap = self._max_entries
+        else:
+            cap = min(self._max_entries, max_entries)
+
+        # Aggiungi candidati ordinati per occorrenze (più frequenti prima)
+        added = 0
+        sorted_candidates = sorted(
+            cumulative_counts.items(),
+            key=lambda kv: kv[1],
+            reverse=True,
+        )
+        for fullname, count in sorted_candidates:
+            if len(self._entries) >= cap:
+                break
+            if count < self._k_threshold:
+                continue
+            if fullname in self._static_lut:
+                continue
+            if fullname in self._inv:
+                continue
+            # Cost-benefit char-based (cumulative)
+            next_id = self._next_alias_id
+            alias_len = len(f"_{next_id}")
+            header_entry_len = alias_len + 1 + len(fullname) + 1
+            saving = count * len(fullname) - count * alias_len - header_entry_len
+            if saving > 0:
+                self._add_entry(fullname)
+                added += 1
+        return added
+
     def _encode_full_with_lut(self, obj: Any) -> str:
         """Estrae la logica esistente di encode (count/select/substitute/prefix)."""
         # 1. Conta candidati
