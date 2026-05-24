@@ -31,6 +31,7 @@ from adp.session import (  # noqa: E402
     apply_lut_updates,
     encode_with_dyn_lut,
 )
+from adp.cost import TokenizerCostEstimator, estimate_cost
 try:
     from adp import image
 except ImportError:
@@ -56,5 +57,7 @@ __all__ = [
     "ADPDiffSyncError",
     "apply_lut_updates",
     "encode_with_dyn_lut",
+    "TokenizerCostEstimator",
+    "estimate_cost",
     "__version__",
 ]

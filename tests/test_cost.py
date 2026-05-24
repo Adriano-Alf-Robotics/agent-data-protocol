@@ -60,3 +60,34 @@ def test_estimator_tiktoken_availability_flag():
     """is_tiktoken_available riflette se tiktoken è importato."""
     est = TokenizerCostEstimator()
     assert isinstance(est.is_tiktoken_available, bool)
+
+
+from adp.session import ADPSession
+
+
+def test_session_accepts_cost_estimator_param():
+    est = TokenizerCostEstimator()
+    s = ADPSession(path=None, auto_save=False, cost_estimator=est)
+    assert s._cost_estimator is est
+
+
+def test_session_default_cost_estimator_is_none():
+    s = ADPSession(path=None, auto_save=False)
+    assert s._cost_estimator is None
+
+
+def test_session_with_estimator_uses_tokenizer_for_selection():
+    """Quando cost_estimator passato, _select_candidates lo usa per saving."""
+    est = TokenizerCostEstimator()
+    s = ADPSession(path=None, auto_save=False, k_threshold=2, cost_estimator=est)
+    # "user_authentication_token" è 3 token; alias "_0" è 2 token; count=10 → saving positivo
+    counts = {"user_authentication_token": 10}
+    selected = s._select_candidates(counts)
+    assert "user_authentication_token" in selected
+
+
+def test_tokenizer_cost_estimator_exported_from_adp():
+    """Importabile direttamente da `adp`."""
+    import adp
+    assert hasattr(adp, "TokenizerCostEstimator")
+    assert hasattr(adp, "estimate_cost")

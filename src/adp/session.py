@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 import adp
+from adp.cost import TokenizerCostEstimator
 from adp.diff import compute_diff, apply_diff
 
 
@@ -96,6 +97,7 @@ class ADPSession:
         auto_save: bool = True,
         enable_diff: bool = True,
         diff_threshold: float = 0.7,
+        cost_estimator: TokenizerCostEstimator | None = None,
     ) -> None:
         # Path resolution
         if path is None:
@@ -122,6 +124,8 @@ class ADPSession:
             "miss_count": 0,
             "evictions": 0,
         }
+
+        self._cost_estimator: TokenizerCostEstimator | None = cost_estimator
 
         # Differential encoding state (Est. 5)
         self._enable_diff = enable_diff
@@ -253,7 +257,11 @@ class ADPSession:
         return counts
 
     def _select_candidates(self, counts: dict[str, int]) -> dict[str, int]:
-        """Filtra candidati: soglia K, non in static LUT, saving char non-negativo (break-even incluso)."""
+        """Filtra candidati: soglia K, non in static LUT, saving non-negativo (break-even incluso).
+
+        Se cost_estimator passato in __init__: usa conteggio token reale.
+        Altrimenti: fallback a char-count approssimativo.
+        """
         selected: dict[str, int] = {}
         next_id = self._next_alias_id
         for fullname, count in counts.items():
@@ -262,15 +270,21 @@ class ADPSession:
             if fullname in self._static_lut:
                 continue
             if fullname in self._inv:
-                # Già in dynamic LUT: non re-aggiungere, ma il caller può bumpare LRU
                 continue
-            # Cost-benefit char-based
-            alias_len = len(f"_{next_id}")
-            header_entry_len = alias_len + 1 + len(fullname) + 1  # "_N=fullname;"
-            saving = count * len(fullname) - count * alias_len - header_entry_len
+            alias = f"_{next_id}"
+            if self._cost_estimator is not None:
+                saving = self._cost_estimator.saving_for_entry(
+                    alias=alias, fullname=fullname, count=count
+                )
+            else:
+                # Char-based fallback (backward-compatible)
+                alias_len = len(alias)
+                header_entry_len = alias_len + 1 + len(fullname) + 1
+                saving = (count * len(fullname) - count * alias_len
+                          - header_entry_len)
             if saving >= 0:
                 selected[fullname] = count
-                next_id += 1  # simula incremento per stima alias futuri (approx)
+                next_id += 1
         return selected
 
     def encode(self, obj: Any, *, no_lut: bool = False) -> str:
