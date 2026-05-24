@@ -49,6 +49,7 @@ import json
 import os
 import re
 import tempfile
+from collections import deque
 from pathlib import Path
 from typing import Any
 
@@ -100,6 +101,8 @@ class ADPSession:
         cost_estimator: TokenizerCostEstimator | None = None,
         announce_caps: bool = True,
         caps_timeout_msgs: int = 3,
+        tpd_promote_every: int = 10,
+        tpd_promote_max_per_run: int = 10,
     ) -> None:
         # Path resolution
         if path is None:
@@ -128,6 +131,13 @@ class ADPSession:
         }
 
         self._cost_estimator: TokenizerCostEstimator | None = cost_estimator
+
+        # TPD auto-promotion state (Est. 3)
+        self._tpd_promote_every = tpd_promote_every
+        self._tpd_promote_max_per_run = tpd_promote_max_per_run
+        # Ring buffer dei raw msg inviati (size = 2 × promote_every per finestra adeguata)
+        buffer_size = max(2 * tpd_promote_every, 1) if tpd_promote_every > 0 else 1
+        self._tpd_buffer: deque[str] = deque(maxlen=buffer_size)
 
         # Capability negotiation state (Est. 2)
         self._announce_caps = announce_caps
@@ -740,6 +750,18 @@ class ADPSession:
         self.reset()
         payload = adp.encode(obj, key_lut=self._static_lut or None)
         return "_lut_reset=1;" + payload
+
+    def _run_tpd_promotion(self) -> list[str]:
+        """Esegue un giro di TPD learning sul ring buffer e promuove le phrase
+        rilevate in dynamic LUT. Ritorna la lista degli alias aggiunti.
+
+        Pubblico per test e debug; chiamato automaticamente da encode() ogni
+        `tpd_promote_every` send (se > 0).
+        """
+        if not self._tpd_buffer:
+            return []
+        # Stub Task 1: implementazione completa in Task 3
+        return []
 
     def stats(self) -> dict:
         """Dict diagnostico."""
