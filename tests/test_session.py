@@ -303,3 +303,54 @@ def test_stats_reports_real_events():
     st = b.stats()
     assert st["entries_count"] >= 1
     assert st["hit_count"] >= 2  # almeno role o administrator espanso 2 volte
+
+
+def test_apply_lut_updates_extracts_prefix():
+    from adp.session import apply_lut_updates
+    msg = "_lut_add={_0=admin};u={i=42;r=_0}"
+    payload_str, updated_lut = apply_lut_updates(msg, {})
+    assert payload_str == "u={i=42;r=_0}"
+    assert updated_lut == {"_0": "admin"}
+
+
+def test_apply_lut_updates_handles_reset():
+    from adp.session import apply_lut_updates
+    msg = "_lut_reset=1;u={i=42}"
+    payload_str, updated_lut = apply_lut_updates(msg, {"_0": "old"})
+    assert payload_str == "u={i=42}"
+    assert updated_lut == {}
+
+
+def test_encode_with_dyn_lut_returns_msg_and_updated_lut():
+    from adp.session import encode_with_dyn_lut
+    obj = {"a": {"role": "administrator"}, "b": {"role": "administrator"}}
+    msg, new_lut = encode_with_dyn_lut(obj, {}, k_threshold=2, max_entries=256)
+    assert "_lut_add" in msg
+    assert len(new_lut) >= 1
+
+
+def test_concurrent_save_no_corruption(tmp_path):
+    """Due session che scrivono in parallelo non corrompono il file."""
+    import threading
+    path = tmp_path / "lut.json"
+    s1 = ADPSession(path=path, auto_save=False)
+    s2 = ADPSession(path=path, auto_save=False)
+    s1._add_entry("a")
+    s2._add_entry("b")
+
+    errors = []
+    def writer(s):
+        try:
+            for _ in range(20):
+                s.save()
+        except Exception as e:
+            errors.append(e)
+
+    t1 = threading.Thread(target=writer, args=(s1,))
+    t2 = threading.Thread(target=writer, args=(s2,))
+    t1.start(); t2.start()
+    t1.join(); t2.join()
+    assert errors == []
+    # File parsabile
+    data = json.loads(path.read_text())
+    assert data["version"] == 1

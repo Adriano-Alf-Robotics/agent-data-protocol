@@ -24,7 +24,12 @@ from adp import tpd
 from adp.db import ADPStore
 from adp import integrity
 from adp.integrity import sign, verify, is_signed, IntegrityError
-from adp.session import ADPSession, ADPLUTSyncError  # noqa: E402
+from adp.session import (  # noqa: E402
+    ADPSession,
+    ADPLUTSyncError,
+    apply_lut_updates,
+    encode_with_dyn_lut,
+)
 try:
     from adp import image
 except ImportError:
@@ -47,5 +52,7 @@ __all__ = [
     "validate_lut",
     "ADPSession",
     "ADPLUTSyncError",
+    "apply_lut_updates",
+    "encode_with_dyn_lut",
     "__version__",
 ]
