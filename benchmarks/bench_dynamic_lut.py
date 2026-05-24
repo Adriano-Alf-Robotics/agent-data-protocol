@@ -128,53 +128,53 @@ def run() -> None:
     toon_tokens = sum(_tok(encode_toon(m)) for m in msgs)
 
     # Dynamic LUT (cold start: vuota all'inizio)
-    sender_cold = adp.ADPSession(path=None, auto_save=False)
-    receiver_cold = adp.ADPSession(path=None, auto_save=False)
+    # Pattern realistico: A invia X-type (i pari), B invia Y-type (i dispari).
+    # Ogni session tiene baseline per la propria direzione di invio.
+    a_cold = adp.ADPSession(path=None, auto_save=False, enable_diff=False)
+    b_cold = adp.ADPSession(path=None, auto_save=False, enable_diff=False)
     dyn_cold_tokens = 0
-    for m in msgs:
-        encoded = sender_cold.encode(m)
-        decoded = receiver_cold.decode(encoded)
-        assert decoded == m, "round-trip rotto"
+    for i, m in enumerate(msgs):
+        sender, receiver = (a_cold, b_cold) if i % 2 == 0 else (b_cold, a_cold)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (cold) msg {i}"
         dyn_cold_tokens += _tok(encoded)
 
     # Dynamic LUT + static LUT combinata
-    sender_combo = adp.ADPSession(
-        path=None, auto_save=False, static_lut=adp.DEFAULT_AGENT_LUT
-    )
-    receiver_combo = adp.ADPSession(
-        path=None, auto_save=False, static_lut=adp.DEFAULT_AGENT_LUT
-    )
+    a_combo = adp.ADPSession(path=None, auto_save=False,
+                              static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=False)
+    b_combo = adp.ADPSession(path=None, auto_save=False,
+                              static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=False)
     dyn_combo_tokens = 0
-    for m in msgs:
-        encoded = sender_combo.encode(m)
-        decoded = receiver_combo.decode(encoded)
-        assert decoded == m, "round-trip rotto (combo)"
+    for i, m in enumerate(msgs):
+        sender, receiver = (a_combo, b_combo) if i % 2 == 0 else (b_combo, a_combo)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (combo) msg {i}"
         dyn_combo_tokens += _tok(encoded)
 
     # Dynamic LUT + diff encoding (cold)
-    sender_diff = adp.ADPSession(path=None, auto_save=False, enable_diff=True)
-    receiver_diff = adp.ADPSession(path=None, auto_save=False, enable_diff=True)
+    a_diff = adp.ADPSession(path=None, auto_save=False, enable_diff=True)
+    b_diff = adp.ADPSession(path=None, auto_save=False, enable_diff=True)
     dyn_diff_tokens = 0
-    for m in msgs:
-        encoded = sender_diff.encode(m)
-        decoded = receiver_diff.decode(encoded)
-        assert decoded == m, "round-trip rotto (diff)"
+    for i, m in enumerate(msgs):
+        sender, receiver = (a_diff, b_diff) if i % 2 == 0 else (b_diff, a_diff)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (diff) msg {i}"
         dyn_diff_tokens += _tok(encoded)
 
     # Full stack: dyn LUT + static + diff
-    sender_full = adp.ADPSession(
-        path=None, auto_save=False, static_lut=adp.DEFAULT_AGENT_LUT,
-        enable_diff=True,
-    )
-    receiver_full = adp.ADPSession(
-        path=None, auto_save=False, static_lut=adp.DEFAULT_AGENT_LUT,
-        enable_diff=True,
-    )
+    a_full = adp.ADPSession(path=None, auto_save=False,
+                             static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=True)
+    b_full = adp.ADPSession(path=None, auto_save=False,
+                             static_lut=adp.DEFAULT_AGENT_LUT, enable_diff=True)
     full_stack_tokens = 0
-    for m in msgs:
-        encoded = sender_full.encode(m)
-        decoded = receiver_full.decode(encoded)
-        assert decoded == m, "round-trip rotto (full stack)"
+    for i, m in enumerate(msgs):
+        sender, receiver = (a_full, b_full) if i % 2 == 0 else (b_full, a_full)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (full stack) msg {i}"
         full_stack_tokens += _tok(encoded)
 
     baseline = json_tokens
