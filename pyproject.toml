@@ -32,6 +32,9 @@ bench = [
     "pyyaml>=6.0.3",
     "tomli-w>=1.2.0",
 ]
+tokenizer = [
+    "tiktoken>=0.7",
+]
 
 [project.scripts]
 adp = "adp.cli:main"

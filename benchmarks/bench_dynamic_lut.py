@@ -177,6 +177,22 @@ def run() -> None:
         assert decoded == m, f"round-trip rotto (full stack) msg {i}"
         full_stack_tokens += _tok(encoded)
 
+    # Full stack + tokenizer-aware cost estimator
+    est = adp.TokenizerCostEstimator("cl100k_base")
+    a_tok = adp.ADPSession(path=None, auto_save=False,
+                            static_lut=adp.DEFAULT_AGENT_LUT,
+                            enable_diff=True, cost_estimator=est)
+    b_tok = adp.ADPSession(path=None, auto_save=False,
+                            static_lut=adp.DEFAULT_AGENT_LUT,
+                            enable_diff=True, cost_estimator=est)
+    tokenizer_aware_tokens = 0
+    for i, m in enumerate(msgs):
+        sender, receiver = (a_tok, b_tok) if i % 2 == 0 else (b_tok, a_tok)
+        encoded = sender.encode(m)
+        decoded = receiver.decode(encoded)
+        assert decoded == m, f"round-trip rotto (tokenizer-aware) msg {i}"
+        tokenizer_aware_tokens += _tok(encoded)
+
     # Warm start: pre-warm da prima metà della conversazione, misura solo seconda metà
     msgs_warmup = msgs[: len(msgs) // 2]
     msgs_measure = msgs[len(msgs) // 2 :]
@@ -224,6 +240,8 @@ def run() -> None:
     print(f"{'ADP + dynamic + static LUT':<35} {fmt(dyn_combo_tokens, baseline)}")
     print(f"{'ADP + dyn LUT + diff':<35} {fmt(dyn_diff_tokens, baseline)}")
     print(f"{'ADP + full stack (lut+static+diff)':<35} {fmt(full_stack_tokens, baseline)}")
+    print(f"{'ADP full stack + tokenizer-aware':<35} "
+          f"{fmt(tokenizer_aware_tokens, baseline)}")
     print(f"{'TOON':<35} {fmt(toon_tokens, baseline)}")
     print(f"{'-'*70}")
 
@@ -238,6 +256,8 @@ def run() -> None:
     print(f"{'ADP + dynamic + static LUT':<35} {delta_toon(dyn_combo_tokens):>15}")
     print(f"{'ADP + dyn LUT + diff':<35} {delta_toon(dyn_diff_tokens):>15}")
     print(f"{'ADP + full stack':<35} {delta_toon(full_stack_tokens):>15}")
+    print(f"{'ADP full stack + tokenizer-aware':<35} "
+          f"{delta_toon(tokenizer_aware_tokens):>15}")
     print(f"{'-'*70}\n")
 
     print(f"{'-'*70}")
