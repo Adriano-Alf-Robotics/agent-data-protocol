@@ -23,6 +23,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "tiktoken" },
 ]
+tokenizer = [
+    { name = "tiktoken" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -34,9 +37,10 @@ requires-dist = [
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
     { name = "pyyaml", marker = "extra == 'bench'", specifier = ">=6.0.3" },
     { name = "tiktoken", marker = "extra == 'dev'", specifier = ">=0.7" },
+    { name = "tiktoken", marker = "extra == 'tokenizer'", specifier = ">=0.7" },
     { name = "tomli-w", marker = "extra == 'bench'", specifier = ">=1.2.0" },
 ]
-provides-extras = ["dev", "bench"]
+provides-extras = ["dev", "bench", "tokenizer"]
 
 [[package]]
 name = "certifi"
