@@ -303,3 +303,56 @@ def test_encode_full_then_decode_clears_receiver_baseline():
     assert out == {"x": 1}
     # Receiver baseline ora == {"x": 1}
     assert receiver._last_received_payload == {"x": 1}
+
+
+def test_combined_lut_and_diff_round_trip_20_messages():
+    """Sessione 20 msg con dyn LUT + diff encoding entrambi attivi."""
+    a = ADPSession(path=None, auto_save=False)
+    b = ADPSession(path=None, auto_save=False)
+
+    diff_count = 0
+    full_count = 0
+    for i in range(20):
+        p = {
+            "task_id": f"task_{i:03d}",
+            "user": {"id": 42, "role": "administrator", "dept": "engineering"},
+            "status": "in_progress" if i % 3 != 0 else "completed",
+            "metrics": {"errors": i % 5, "latency_ms": 200 + i},
+        }
+        msg = a.encode(p)
+        if "_diff=" in msg:
+            diff_count += 1
+        else:
+            full_count += 1
+        out = b.decode(msg)
+        assert out == p, f"mismatch at msg {i}"
+
+    # Almeno alcuni messaggi dopo il primo devono essere diff
+    assert diff_count >= 5
+    assert full_count >= 1  # primo msg almeno
+    # Stati di entrambi sincronizzati
+    assert a._last_sent_payload == b._last_received_payload
+
+
+def test_sync_error_recovery_via_encode_full():
+    """Dopo sync error, recovery con encode_full ristabilisce comunicazione."""
+    sender = ADPSession(path=None, auto_save=False)
+    receiver = ADPSession(path=None, auto_save=False)
+    # Sender ha baseline, receiver no (simula receiver appena avviato)
+    sender.encode({"a": 1})  # sender now has baseline
+    sender.encode({"a": 1, "b": 2})  # sender will use diff
+
+    # Manualmente forziamo: receiver è fresco
+    receiver._last_received_payload = None
+    receiver._last_received_base_id = None
+
+    # Sender invia diff a receiver che non ha baseline
+    msg = sender.encode({"a": 1, "b": 3})
+    if "_diff=" in msg:
+        with pytest.raises(ADPDiffSyncError):
+            receiver.decode(msg)
+
+        # Recovery: sender invia full
+        recovery_msg = sender.encode_full({"a": 1, "b": 3})
+        out = receiver.decode(recovery_msg)
+        assert out == {"a": 1, "b": 3}
