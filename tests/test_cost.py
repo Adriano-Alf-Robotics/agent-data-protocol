@@ -91,3 +91,36 @@ def test_tokenizer_cost_estimator_exported_from_adp():
     import adp
     assert hasattr(adp, "TokenizerCostEstimator")
     assert hasattr(adp, "estimate_cost")
+
+
+def test_warmup_uses_cost_estimator_when_present():
+    """warmup() usa cost_estimator se ADPSession lo ha, per cost-benefit.
+    Verifica che saving_for_entry sia chiamato (non il char-count fallback).
+    """
+    from unittest.mock import patch
+
+    est = TokenizerCostEstimator()
+    s = ADPSession(path=None, auto_save=False, k_threshold=2, cost_estimator=est)
+    # 8 messaggi: count=8 → saving_for_entry("_0", "user_authentication_token", 8) = +2 > 0
+    messages = [
+        {"role": "user_authentication_token", "dept": "engineering_operations"},
+    ] * 8
+    with patch.object(est, "saving_for_entry", wraps=est.saving_for_entry) as mock_saving:
+        s.warmup(messages)
+        # saving_for_entry deve essere chiamato almeno una volta
+        assert mock_saving.call_count > 0
+    # Almeno una entry aggiunta
+    assert len(s._entries) > 0
+
+
+def test_warmup_without_estimator_falls_back_to_charcount():
+    """warmup() senza cost_estimator usa char-count (default backward-compat)."""
+    s = ADPSession(path=None, auto_save=False, k_threshold=2, cost_estimator=None)
+    messages = [
+        {"role": "administrator", "dept": "engineering"},
+        {"role": "administrator", "dept": "engineering"},
+    ]
+    s.warmup(messages)
+    # Char-count è più "permissivo": "administrator" (13 char × 2 = 26)
+    # − (2 char × 2 = 4) − header (~17) = 5 > 0 → entry aggiunta
+    assert "administrator" in s._inv

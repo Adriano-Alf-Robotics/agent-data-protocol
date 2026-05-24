@@ -411,11 +411,17 @@ class ADPSession:
                 continue
             if fullname in self._inv:
                 continue
-            # Cost-benefit char-based (cumulative)
-            next_id = self._next_alias_id
-            alias_len = len(f"_{next_id}")
-            header_entry_len = alias_len + 1 + len(fullname) + 1
-            saving = count * len(fullname) - count * alias_len - header_entry_len
+            # Cost-benefit: tokenizer-aware se estimator presente, char-count altrimenti
+            alias = f"_{self._next_alias_id}"
+            if self._cost_estimator is not None:
+                saving = self._cost_estimator.saving_for_entry(
+                    alias=alias, fullname=fullname, count=count
+                )
+            else:
+                alias_len = len(alias)
+                header_entry_len = alias_len + 1 + len(fullname) + 1
+                saving = (count * len(fullname) - count * alias_len
+                          - header_entry_len)
             if saving > 0:
                 self._add_entry(fullname)
                 added += 1
