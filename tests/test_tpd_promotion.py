@@ -132,3 +132,46 @@ def test_encode_triggers_promotion_at_correct_count(monkeypatch):
     s.encode({"f": 6})
     # Seconda promotion a counter=6
     assert call_count == [3, 6]
+
+
+def test_round_trip_with_tpd_promotion_does_not_break():
+    """Sessione completa con TPD promotion attiva: encode/decode round-trip
+    funziona regolarmente. Promotion non corrompe la sincronizzazione."""
+    a = ADPSession(path=None, auto_save=False,
+                   announce_caps=False,
+                   tpd_promote_every=3)
+    b = ADPSession(path=None, auto_save=False,
+                   announce_caps=False,
+                   tpd_promote_every=3)
+
+    payloads = [
+        {"task": "process", "msg": "Revenue grew driven by enterprise sales"},
+        {"task": "process", "msg": "Operational expenses remained flat"},
+        {"task": "process", "msg": "Customer churn dropped to lowest"},
+        {"task": "process", "msg": "Revenue grew driven by enterprise sales"},
+        {"task": "process", "msg": "Net-new logos by ARR"},
+        {"task": "process", "msg": "Revenue grew driven by enterprise sales"},
+    ]
+    for i, p in enumerate(payloads):
+        msg = a.encode(p)
+        out = b.decode(msg)
+        assert out == p, f"round-trip rotto al msg {i}"
+
+
+def test_run_tpd_promotion_returns_list_of_alias_strings():
+    """Tipo di ritorno è list[str] (alias _N format)."""
+    s = ADPSession(path=None, auto_save=False, k_threshold=2,
+                    tpd_promote_every=100)
+    text_content = (
+        "Revenue grew year over year, driven primarily by enterprise sales. "
+        "Revenue grew strongly. Operational expenses remained flat. "
+        "Operational expenses controlled. Revenue grew sustainably."
+    )
+    for _ in range(3):
+        s._tpd_buffer.append(f'r="{text_content}"')
+
+    added = s._run_tpd_promotion()
+    assert isinstance(added, list)
+    for alias in added:
+        assert isinstance(alias, str)
+        assert alias.startswith("_")
