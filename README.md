@@ -758,6 +758,40 @@ per pHash. Installa con `uv sync --extra bench`.
 
 ## Usare ADP in Claude Code
 
+### Risultato A/B reale: report subagent JSON vs ADP
+
+Test condotto direttamente dentro una sessione Claude Code, dispatchando
+due subagent (modello `claude-haiku-4-5`) con istruzioni IDENTICHE
+sullo stesso task — analizza `src/adp/` e riporta per ogni modulo nome,
+righe, simboli esportati, descrizione — chiedendo a uno il report in
+**JSON** e all'altro in **ADP** (modulo `prompt` di ADP fornisce
+istruzioni few-shot all'agente).
+
+| Formato output | Token (cl100k_base) | Byte |
+|---|---:|---:|
+| JSON | 766 | 2,696 |
+| **ADP** | **471** | **1,717** |
+
+**ADP risparmia il 38,5% dei token** (295 token in meno) e il 36,3% dei
+byte sul singolo report subagent.
+
+**Impatto economico tipico:** una sessione Claude Code che dispatcha
+50 subagent con report strutturato consuma in input verso
+l'orchestratore circa 25.000 token in JSON contro 15.400 in ADP. Su
+Opus 4.7 ($15/Mtok input):
+
+| Configurazione | Costo report subagent / sessione | $/anno (100 sessioni/giorno) |
+|---|---:|---:|
+| Subagent in JSON | $0,375 | $13.700 |
+| Subagent in ADP | $0,231 | $8.430 |
+| **Risparmio** | **$0,144 (−38%)** | **$5.260** |
+
+Sul singolo turno il risparmio è modesto in valore assoluto, ma scala
+linearmente col numero di subagent dispatchati. Workload tipici di
+orchestrazione (planner → executor → reviewer, fan-out di analisi
+parallele, ricerca multi-file) producono decine di report subagent per
+sessione: ADP diventa una scelta economicamente significativa.
+
 ### Plugin pronto (raccomandato)
 
 Il repository contiene `claude-plugin/`, un plugin Claude Code completo
