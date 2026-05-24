@@ -210,22 +210,28 @@ def run() -> None:
 
     # Statistiche dyn LUT
     print(f"Statistiche dynamic LUT (cold start):")
-    print(f"  entries finali: {sender_cold.stats()['entries_count']}")
-    print(f"  hit count (decoder): {receiver_cold.stats()['hit_count']}")
+    print(f"  entries finali (a+b): {a_cold.stats()['entries_count']} + "
+          f"{b_cold.stats()['entries_count']}")
+    print(f"  hit count (a+b): {a_cold.stats()['hit_count']} + "
+          f"{b_cold.stats()['hit_count']}")
     print()
     print(f"Statistiche dynamic+static LUT:")
-    print(f"  entries finali: {sender_combo.stats()['entries_count']}")
-    print(f"  hit count (decoder): {receiver_combo.stats()['hit_count']}")
+    print(f"  entries finali (a+b): {a_combo.stats()['entries_count']} + "
+          f"{b_combo.stats()['entries_count']}")
+    print(f"  hit count (a+b): {a_combo.stats()['hit_count']} + "
+          f"{b_combo.stats()['hit_count']}")
     print()
     print(f"Statistiche dynamic LUT + diff:")
-    print(f"  entries finali: {sender_diff.stats()['entries_count']}")
-    print(f"  hit count (decoder): {receiver_diff.stats()['hit_count']}")
+    print(f"  entries finali (a+b): {a_diff.stats()['entries_count']} + "
+          f"{b_diff.stats()['entries_count']}")
+    print(f"  hit count (a+b): {a_diff.stats()['hit_count']} + "
+          f"{b_diff.stats()['hit_count']}")
     print()
-    print(f"Statistiche full stack (dyn+static+diff):")
-    print(f"  entries finali: {sender_full.stats()['entries_count']}")
-    print(f"  hit count (decoder): {receiver_full.stats()['hit_count']}")
+    print(f"Statistiche full stack:")
+    print(f"  entries finali (a+b): {a_full.stats()['entries_count']} + "
+          f"{b_full.stats()['entries_count']}")
+    print(f"  hit count (a+b): {a_full.stats()['hit_count']} + "
+          f"{b_full.stats()['hit_count']}")
     print()
-
-
 if __name__ == "__main__":
     run()
