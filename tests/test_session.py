@@ -174,7 +174,7 @@ def test_select_candidates_skips_negative_saving():
 
 
 def test_encode_no_repeats_no_prefix():
-    s = ADPSession(path=None, auto_save=False)
+    s = ADPSession(path=None, auto_save=False, announce_caps=False)
     msg = s.encode({"id": 42})
     # Nessuna chiave ripetuta sopra soglia → nessun _lut_add
     assert "_lut_add" not in msg
@@ -238,8 +238,8 @@ def test_decode_applies_lut_add():
 
 
 def test_decode_round_trip_two_sessions():
-    a = ADPSession(path=None, auto_save=False)
-    b = ADPSession(path=None, auto_save=False)
+    a = ADPSession(path=None, auto_save=False, announce_caps=False)
+    b = ADPSession(path=None, auto_save=False, announce_caps=False)
 
     obj = {
         "user": {"role": "administrator", "dept": "engineering"},
@@ -294,8 +294,8 @@ def test_reset_clears_only_local_state():
 
 
 def test_stats_reports_real_events():
-    a = ADPSession(path=None, auto_save=False)
-    b = ADPSession(path=None, auto_save=False)
+    a = ADPSession(path=None, auto_save=False, announce_caps=False)
+    b = ADPSession(path=None, auto_save=False, announce_caps=False)
     obj = {"x": {"role": "administrator", "k": "valuevalue"},
            "y": {"role": "administrator", "k": "valuevalue"}}
     msg = a.encode(obj)
@@ -360,8 +360,8 @@ def test_round_trip_20_messages_two_agents(tmp_path):
     """Scambio bidirezionale 20 messaggi, LUT cresce, decode resta consistente."""
     a_path = tmp_path / "a.json"
     b_path = tmp_path / "b.json"
-    a = ADPSession(path=a_path, max_entries=32, auto_save=False)
-    b = ADPSession(path=b_path, max_entries=32, auto_save=False)
+    a = ADPSession(path=a_path, max_entries=32, auto_save=False, announce_caps=False)
+    b = ADPSession(path=b_path, max_entries=32, auto_save=False, announce_caps=False)
 
     payloads = []
     for i in range(20):

@@ -222,8 +222,8 @@ def test_decode_full_message_updates_baseline():
 
 
 def test_decode_diff_applies_to_baseline():
-    s_sender = ADPSession(path=None, auto_save=False)
-    s_receiver = ADPSession(path=None, auto_save=False)
+    s_sender = ADPSession(path=None, auto_save=False, announce_caps=False)
+    s_receiver = ADPSession(path=None, auto_save=False, announce_caps=False)
     # Payload grande: diff di un solo campo deve essere molto più piccolo del full
     base = {
         "task_id": "task_001",
@@ -307,8 +307,8 @@ def test_encode_full_then_decode_clears_receiver_baseline():
 
 def test_combined_lut_and_diff_round_trip_20_messages():
     """Sessione 20 msg con dyn LUT + diff encoding entrambi attivi."""
-    a = ADPSession(path=None, auto_save=False)
-    b = ADPSession(path=None, auto_save=False)
+    a = ADPSession(path=None, auto_save=False, announce_caps=False)
+    b = ADPSession(path=None, auto_save=False, announce_caps=False)
 
     diff_count = 0
     full_count = 0

@@ -33,3 +33,31 @@ def test_session_reset_caps_clears_state():
     assert s.peer_caps is None
     assert s._caps_announced is False
     assert s._caps_outbound_count == 0
+
+
+def test_encode_first_message_includes_caps_prefix():
+    """Primo encode include _caps={dyn_lut=1;max_entries=256;diff=1} prefix."""
+    s = ADPSession(path=None, auto_save=False, announce_caps=True)
+    msg = s.encode({"a": 1})
+    assert "_caps={" in msg
+    assert "dyn_lut=1" in msg
+    assert "max_entries=256" in msg
+    assert "diff=1" in msg
+    # Stato aggiornato
+    assert s._caps_announced is True
+
+
+def test_encode_subsequent_messages_no_caps_prefix():
+    """Solo il primo msg include _caps. Successivi no."""
+    s = ADPSession(path=None, auto_save=False, announce_caps=True)
+    s.encode({"a": 1})  # primo: include caps
+    msg2 = s.encode({"b": 2})
+    assert "_caps=" not in msg2
+
+
+def test_encode_announce_caps_false_skips_prefix():
+    """announce_caps=False non emette mai caps."""
+    s = ADPSession(path=None, auto_save=False, announce_caps=False)
+    msg = s.encode({"a": 1})
+    assert "_caps=" not in msg
+    assert s._caps_announced is False

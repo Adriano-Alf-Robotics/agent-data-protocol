@@ -299,37 +299,57 @@ class ADPSession:
     def encode(self, obj: Any, *, no_lut: bool = False) -> str:
         """Encode obj a stringa ADP.
 
-        - Se no_lut=True: bypassa dynamic LUT (e diff encoding).
-        - Se enable_diff=True e abbiamo un baseline last_sent: calcola diff,
-          se conviene (size < threshold * full_size) emette _base=ID;_diff={...},
-          altrimenti emette full.
+        - Se `announce_caps=True` AND non ancora annunciato: prepende
+          `_caps={dyn_lut=1;max_entries=N;diff=1}` al messaggio.
+        - Se `no_lut=True`: bypassa dynamic LUT (e diff encoding).
+        - Se `enable_diff=True` e abbiamo un baseline last_sent: calcola diff,
+          se conviene emette _base=ID;_diff={...}, altrimenti emette full.
         - Aggiorna sempre _last_sent_payload + _last_sent_base_id col payload corrente.
         """
+        caps_prefix = self._build_caps_prefix()
+
         if no_lut:
             self._last_sent_payload = obj
             self._last_sent_base_id = self._compute_base_id(obj)
             if self._static_lut:
-                return adp.encode(obj, key_lut=self._static_lut)
-            return adp.encode(obj)
+                payload = adp.encode(obj, key_lut=self._static_lut)
+            else:
+                payload = adp.encode(obj)
+            self._caps_outbound_count += 1
+            return caps_prefix + payload
 
-        # Step 1: produrre la versione "full" del messaggio (con dyn LUT)
         full_msg = self._encode_full_with_lut(obj)
 
-        # Step 2: se enable_diff e c'è un baseline, valutare diff
         diff_msg: str | None = None
         if self._enable_diff and self._last_sent_payload is not None:
             diff_dict = compute_diff(self._last_sent_payload, obj)
-            if diff_dict:  # non vuoto: payload cambiato
+            if diff_dict:
                 diff_payload = adp.encode(diff_dict, key_lut=self._static_lut or None)
                 candidate = f"_base={self._last_sent_base_id};_diff={diff_payload};"
                 if len(candidate) < self._diff_threshold * len(full_msg):
                     diff_msg = candidate
 
-        # Aggiorna baseline state
         self._last_sent_payload = obj
         self._last_sent_base_id = self._compute_base_id(obj)
 
-        return diff_msg if diff_msg is not None else full_msg
+        chosen = diff_msg if diff_msg is not None else full_msg
+        self._caps_outbound_count += 1
+        return caps_prefix + chosen
+
+    def _build_caps_prefix(self) -> str:
+        """Costruisce il prefix _caps= se va annunciato, '' altrimenti.
+
+        Marca _caps_announced=True dopo l'emissione.
+        """
+        if not self._announce_caps or self._caps_announced:
+            return ""
+        diff_flag = 1 if self._enable_diff else 0
+        prefix = (
+            f"_caps={{dyn_lut=1;max_entries={self._max_entries};"
+            f"diff={diff_flag}}};"
+        )
+        self._caps_announced = True
+        return prefix
 
     def encode_full(self, obj: Any) -> str:
         """Forza encoding completo (no diff). Emette _diff_reset=1 al receiver.
