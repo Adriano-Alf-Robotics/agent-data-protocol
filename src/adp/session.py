@@ -301,14 +301,22 @@ class ADPSession:
 
         - Se `announce_caps=True` AND non ancora annunciato: prepende
           `_caps={dyn_lut=1;max_entries=N;diff=1}` al messaggio.
-        - Se `no_lut=True`: bypassa dynamic LUT (e diff encoding).
-        - Se `enable_diff=True` e abbiamo un baseline last_sent: calcola diff,
-          se conviene emette _base=ID;_diff={...}, altrimenti emette full.
-        - Aggiorna sempre _last_sent_payload + _last_sent_base_id col payload corrente.
+        - Auto-degrade: se dopo `caps_timeout_msgs` send senza ricevere
+          peer_caps, sender bypassa dyn LUT e diff automaticamente.
+        - Se `no_lut=True` (esplicito): bypassa dynamic LUT e diff.
+        - Altrimenti: usa dynamic LUT + diff (se enable_diff).
+        - Aggiorna baseline state.
         """
         caps_prefix = self._build_caps_prefix()
 
-        if no_lut:
+        # Auto-degrade check
+        effective_no_lut = no_lut
+        if (self._announce_caps
+                and self._peer_caps is None
+                and self._caps_outbound_count >= self._caps_timeout_msgs):
+            effective_no_lut = True
+
+        if effective_no_lut:
             self._last_sent_payload = obj
             self._last_sent_base_id = self._compute_base_id(obj)
             if self._static_lut:

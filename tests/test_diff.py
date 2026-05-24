@@ -307,8 +307,9 @@ def test_encode_full_then_decode_clears_receiver_baseline():
 
 def test_combined_lut_and_diff_round_trip_20_messages():
     """Sessione 20 msg con dyn LUT + diff encoding entrambi attivi."""
-    a = ADPSession(path=None, auto_save=False)
-    b = ADPSession(path=None, auto_save=False)
+    # caps_timeout_msgs alto: no auto-degrade in questo test (no peer caps bidirezionali)
+    a = ADPSession(path=None, auto_save=False, caps_timeout_msgs=1000)
+    b = ADPSession(path=None, auto_save=False, caps_timeout_msgs=1000)
 
     diff_count = 0
     full_count = 0

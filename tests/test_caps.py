@@ -83,3 +83,34 @@ def test_decode_caps_idempotent_subsequent_msgs():
     caps_before = dict(receiver.peer_caps)
     receiver.decode(sender.encode({"b": 2}))
     assert receiver.peer_caps == caps_before
+
+
+def test_encode_auto_degrade_after_timeout():
+    """Dopo `caps_timeout_msgs` send senza vedere peer_caps, sender
+    automaticamente disabilita dyn LUT (passa a no_lut)."""
+    s = ADPSession(path=None, auto_save=False,
+                   announce_caps=True, caps_timeout_msgs=3)
+    # Send 4 msg senza mai ricevere caps di ritorno
+    s.encode({"role": "administrator", "role2": "administrator"})  # send #1
+    s.encode({"role": "administrator", "role2": "administrator"})  # send #2
+    s.encode({"role": "administrator", "role2": "administrator"})  # send #3
+    msg4 = s.encode({"role": "administrator", "role2": "administrator"})
+    # Al 4° messaggio (counter > timeout), encoder dovrebbe aver
+    # automaticamente disabilitato dyn LUT
+    # Indicatore: nessun _lut_add nel msg4
+    assert "_lut_add" not in msg4
+
+
+def test_encode_no_degrade_if_peer_caps_received():
+    """Se peer_caps è popolato, no auto-degrade."""
+    s = ADPSession(path=None, auto_save=False,
+                   announce_caps=True, caps_timeout_msgs=2)
+    # Simula peer caps ricevuto
+    s._peer_caps = {"dyn_lut": 1, "max_entries": 256, "diff": 1}
+    # Send 5 msg
+    for _ in range(5):
+        s.encode({"role": "administrator", "role2": "administrator"})
+    # Dopo timeout, ma peer_caps presente → continua a usare dyn LUT
+    msg = s.encode({"role2": "administrator", "role3": "administrator"})
+    # Verifica indiretta: "administrator" è sostituito da alias _N
+    assert "administrator" not in msg
