@@ -53,6 +53,7 @@ from pathlib import Path
 from typing import Any
 
 import adp
+from adp.diff import compute_diff, apply_diff
 
 
 class ADPLUTSyncError(Exception):
@@ -273,12 +274,42 @@ class ADPSession:
         return selected
 
     def encode(self, obj: Any, *, no_lut: bool = False) -> str:
-        """Encode obj a stringa ADP. Se no_lut=True bypassa dynamic LUT."""
+        """Encode obj a stringa ADP.
+
+        - Se no_lut=True: bypassa dynamic LUT (e diff encoding).
+        - Se enable_diff=True e abbiamo un baseline last_sent: calcola diff,
+          se conviene (size < threshold * full_size) emette _base=ID;_diff={...},
+          altrimenti emette full.
+        - Aggiorna sempre _last_sent_payload + _last_sent_base_id col payload corrente.
+        """
         if no_lut:
+            self._last_sent_payload = obj
+            self._last_sent_base_id = self._compute_base_id(obj)
             if self._static_lut:
                 return adp.encode(obj, key_lut=self._static_lut)
             return adp.encode(obj)
 
+        # Step 1: produrre la versione "full" del messaggio (con dyn LUT)
+        full_msg = self._encode_full_with_lut(obj)
+
+        # Step 2: se enable_diff e c'è un baseline, valutare diff
+        diff_msg: str | None = None
+        if self._enable_diff and self._last_sent_payload is not None:
+            diff_dict = compute_diff(self._last_sent_payload, obj)
+            if diff_dict:  # non vuoto: payload cambiato
+                diff_payload = adp.encode(diff_dict, key_lut=self._static_lut or None)
+                candidate = f"_base={self._last_sent_base_id};_diff={diff_payload};"
+                if len(candidate) < self._diff_threshold * len(full_msg):
+                    diff_msg = candidate
+
+        # Aggiorna baseline state
+        self._last_sent_payload = obj
+        self._last_sent_base_id = self._compute_base_id(obj)
+
+        return diff_msg if diff_msg is not None else full_msg
+
+    def _encode_full_with_lut(self, obj: Any) -> str:
+        """Estrae la logica esistente di encode (count/select/substitute/prefix)."""
         # 1. Conta candidati
         counts = self._count_candidates(obj)
 
@@ -291,13 +322,12 @@ class ADPSession:
         new_candidates = self._select_candidates(counts)
 
         # 4. Aggiungi entry per ognuno
-        new_aliases: dict[str, str] = {}  # alias -> fullname (per il prefix)
+        new_aliases: dict[str, str] = {}
         for fullname in new_candidates:
             alias = self._add_entry(fullname)
             new_aliases[alias] = fullname
 
-        # 5. Sostituisci nel payload (chiavi+valori string ricorrenti) usando
-        #    static LUT + dynamic LUT
+        # 5. Sostituisci nel payload
         substituted = self._substitute(obj)
 
         # 6. Compone messaggio finale
@@ -305,11 +335,19 @@ class ADPSession:
         if not new_aliases:
             return payload_adp
 
-        # Prefix: _lut_add={alias=fullname;...};payload
         prefix_pairs = ";".join(f"{a}={self._quote_if_needed(f)}"
                                 for a, f in new_aliases.items())
         prefix = f"_lut_add={{{prefix_pairs}}};"
         return prefix + payload_adp
+
+    @staticmethod
+    def _compute_base_id(obj: Any) -> str:
+        """Hash troncato di un payload per identificare il baseline.
+        Usa blake2b digest_size=4 = 8 hex char (32 bit, sufficiente per ID
+        per-session)."""
+        import hashlib
+        raw = adp.encode(obj).encode("utf-8")
+        return hashlib.blake2b(raw, digest_size=4).hexdigest()
 
     def _substitute(self, obj: Any) -> Any:
         """Ricorsivamente sostituisci chiavi e valori string usando dynamic LUT."""

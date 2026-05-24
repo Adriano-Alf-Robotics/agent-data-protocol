@@ -360,8 +360,9 @@ def test_round_trip_20_messages_two_agents(tmp_path):
     """Scambio bidirezionale 20 messaggi, LUT cresce, decode resta consistente."""
     a_path = tmp_path / "a.json"
     b_path = tmp_path / "b.json"
-    a = ADPSession(path=a_path, max_entries=32, auto_save=False)
-    b = ADPSession(path=b_path, max_entries=32, auto_save=False)
+    # enable_diff=False: decoder non gestisce ancora _base+_diff (Task 5)
+    a = ADPSession(path=a_path, max_entries=32, auto_save=False, enable_diff=False)
+    b = ADPSession(path=b_path, max_entries=32, auto_save=False, enable_diff=False)
 
     payloads = []
     for i in range(20):

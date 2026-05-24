@@ -152,3 +152,59 @@ def test_session_diff_params_configurable():
                    enable_diff=False, diff_threshold=0.5)
     assert s._enable_diff is False
     assert s._diff_threshold == 0.5
+
+
+def test_encode_first_message_full_no_diff_prefix():
+    s = ADPSession(path=None, auto_save=False)
+    msg = s.encode({"a": 1, "b": 2})
+    assert "_base=" not in msg
+    assert "_diff=" not in msg
+    # State aggiornato
+    assert s._last_sent_payload == {"a": 1, "b": 2}
+    assert s._last_sent_base_id is not None
+
+
+def test_encode_second_message_small_change_uses_diff():
+    # Payload grande con un solo campo che cambia: diff deve essere molto più piccolo del full
+    base_payload = {
+        "task_id": "task_001",
+        "user": {
+            "id": 42,
+            "role": "administrator_long_role_string",
+            "dept": "engineering_department_name",
+            "org": "main_organization_unit_long",
+            "location": "datacenter_eu_west_1_location",
+        },
+        "metadata": {
+            "source": "agent_controller_main_instance",
+            "target": "worker_node_eu_west_1_primary",
+            "priority": "high_priority_task_execution",
+        },
+    }
+    next_payload = dict(base_payload)
+    next_payload["task_id"] = "task_002"  # solo questo cambia
+    s = ADPSession(path=None, auto_save=False)
+    s.encode(base_payload)
+    msg2 = s.encode(next_payload)
+    assert "_base=" in msg2
+    assert "_diff=" in msg2
+
+
+def test_encode_massive_change_falls_back_to_full():
+    s = ADPSession(path=None, auto_save=False, diff_threshold=0.7)
+    # Primo msg: piccolo
+    s.encode({"a": 1})
+    # Secondo msg: totalmente diverso e molto più grande
+    big_payload = {f"key_{i}": f"value_administrator_long_{i}" for i in range(50)}
+    msg2 = s.encode(big_payload)
+    # Diff sarebbe enorme rispetto al full → fallback a full
+    assert "_base=" not in msg2
+    assert "_diff=" not in msg2
+
+
+def test_encode_diff_disabled_never_emits():
+    s = ADPSession(path=None, auto_save=False, enable_diff=False)
+    s.encode({"a": 1})
+    msg2 = s.encode({"a": 1, "b": 2})
+    assert "_base=" not in msg2
+    assert "_diff=" not in msg2
