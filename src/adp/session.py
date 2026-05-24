@@ -377,13 +377,21 @@ class ADPSession:
     # decode() e metodi helper
     # ------------------------------------------------------------------
 
-    _RESERVED_KEYS = ("_lut_reset", "_lut_add")
+    _RESERVED_KEYS = ("_lut_reset", "_lut_add", "_diff_reset", "_base", "_diff")
 
     def decode(self, msg: str) -> Any:
-        """Decode messaggio ADP. Applica prefissi _lut_reset/_lut_add se presenti,
-        poi espande alias dynamic LUT nel payload risultante."""
+        """Decode messaggio ADP. Applica nell'ordine:
+        1. _lut_reset / _lut_add — aggiorna dynamic LUT
+        2. _diff_reset — pulisce baseline received
+        3. _base + _diff — applica diff a baseline received
+        4. Resto del payload — decode normale, aggiorna baseline received
+        Espande infine alias dynamic LUT nel risultato.
+        """
         rest = msg
         seen: set[str] = set()
+        diff_base_id: str | None = None
+        diff_dict: dict | None = None
+
         while True:
             prefix_match = self._match_reserved_prefix(rest)
             if prefix_match is None:
@@ -400,12 +408,51 @@ class ADPSession:
                     self._apply_lut_reset()
             elif key == "_lut_add":
                 self._apply_lut_add(value_str)
+            elif key == "_diff_reset":
+                if value_str not in ("0", "1"):
+                    raise adp.ADPParseError(
+                        f"_diff_reset valore invalido: {value_str!r}")
+                if value_str == "1":
+                    self._last_received_payload = None
+                    self._last_received_base_id = None
+            elif key == "_base":
+                diff_base_id = value_str
+            elif key == "_diff":
+                parsed = adp.decode(value_str,
+                                    key_lut=self._static_lut or None)
+                if not isinstance(parsed, dict):
+                    raise adp.ADPParseError(
+                        f"_diff malformed: {value_str!r}")
+                diff_dict = parsed
             rest = rest[consumed:]
 
+        # Gestione diff
+        if diff_base_id is not None and diff_dict is not None:
+            if self._last_received_base_id != diff_base_id:
+                raise ADPDiffSyncError(
+                    expected=self._last_received_base_id or "",
+                    got=diff_base_id,
+                )
+            # Applica diff a baseline
+            new_payload = apply_diff(self._last_received_payload, diff_dict)
+            self._last_received_payload = new_payload
+            self._last_received_base_id = self._compute_base_id(new_payload)
+            return self._expand(new_payload)
+
+        if diff_base_id is not None or diff_dict is not None:
+            # _base senza _diff o viceversa: errore
+            raise adp.ADPParseError(
+                "_base e _diff devono apparire insieme")
+
+        # Full payload normale
         if not rest:
             return {}
         payload = adp.decode(rest, key_lut=self._static_lut or None)
-        return self._expand(payload)
+        expanded = self._expand(payload)
+        # Aggiorna baseline received
+        self._last_received_payload = expanded
+        self._last_received_base_id = self._compute_base_id(expanded)
+        return expanded
 
     def _match_reserved_prefix(self, s: str) -> tuple[str, str, int] | None:
         """Se `s` inizia con `<reserved_key>=<value>;`, ritorna

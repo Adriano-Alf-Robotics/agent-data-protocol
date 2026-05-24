@@ -208,3 +208,66 @@ def test_encode_diff_disabled_never_emits():
     msg2 = s.encode({"a": 1, "b": 2})
     assert "_base=" not in msg2
     assert "_diff=" not in msg2
+
+
+def test_decode_full_message_updates_baseline():
+    s = ADPSession(path=None, auto_save=False)
+    import adp as adp_mod
+    msg = adp_mod.encode({"a": 1, "b": 2})
+    out = s.decode(msg)
+    assert out == {"a": 1, "b": 2}
+    # baseline received aggiornato
+    assert s._last_received_payload == {"a": 1, "b": 2}
+    assert s._last_received_base_id is not None
+
+
+def test_decode_diff_applies_to_baseline():
+    s_sender = ADPSession(path=None, auto_save=False)
+    s_receiver = ADPSession(path=None, auto_save=False)
+    # Payload grande: diff di un solo campo deve essere molto più piccolo del full
+    base = {
+        "task_id": "task_001",
+        "user": {
+            "id": 42,
+            "role": "administrator_long_role_string",
+            "dept": "engineering_department_name",
+            "org": "main_organization_unit_long",
+            "location": "datacenter_eu_west_1_location",
+        },
+        "metadata": {
+            "source": "agent_controller_main_instance",
+            "target": "worker_node_eu_west_1_primary",
+            "priority": "high_priority_task_execution",
+        },
+    }
+    update = dict(base)
+    update["task_id"] = "task_002"  # solo questo cambia
+    # First msg: full
+    msg1 = s_sender.encode(base)
+    out1 = s_receiver.decode(msg1)
+    assert out1 == base
+    # Second msg: diff
+    msg2 = s_sender.encode(update)
+    assert "_base=" in msg2  # encoder ha scelto diff
+    out2 = s_receiver.decode(msg2)
+    assert out2 == update
+
+
+def test_decode_diff_sync_error_on_mismatch():
+    s = ADPSession(path=None, auto_save=False)
+    # Receiver non ha mai visto un payload → no baseline
+    msg = "_base=deadbeef;_diff=set={a=1};"
+    with pytest.raises(ADPDiffSyncError) as exc_info:
+        s.decode(msg)
+    assert exc_info.value.got == "deadbeef"
+    # expected è None (no baseline) o ""
+    assert exc_info.value.expected in (None, "")
+
+
+def test_decode_diff_reset_clears_baseline():
+    s = ADPSession(path=None, auto_save=False)
+    s.decode("a=1;b=2")  # full msg, baseline ora settato
+    assert s._last_received_payload is not None
+    # Reset
+    s.decode("_diff_reset=1;a=1")
+    assert s._last_received_payload == {"a": 1}  # nuovo baseline (post-reset)
