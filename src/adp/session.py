@@ -98,6 +98,8 @@ class ADPSession:
         enable_diff: bool = True,
         diff_threshold: float = 0.7,
         cost_estimator: TokenizerCostEstimator | None = None,
+        announce_caps: bool = True,
+        caps_timeout_msgs: int = 3,
     ) -> None:
         # Path resolution
         if path is None:
@@ -126,6 +128,13 @@ class ADPSession:
         }
 
         self._cost_estimator: TokenizerCostEstimator | None = cost_estimator
+
+        # Capability negotiation state (Est. 2)
+        self._announce_caps = announce_caps
+        self._caps_timeout_msgs = caps_timeout_msgs
+        self._peer_caps: dict | None = None
+        self._caps_announced = False
+        self._caps_outbound_count = 0
 
         # Differential encoding state (Est. 5)
         self._enable_diff = enable_diff
@@ -706,6 +715,17 @@ class ADPSession:
             "miss_count": self._stats["miss_count"],
             "evictions": self._stats["evictions"],
         }
+
+    @property
+    def peer_caps(self) -> dict | None:
+        """Capability annunciate dalla controparte (None se mai negoziato)."""
+        return self._peer_caps
+
+    def reset_caps(self) -> None:
+        """Pulisce lo stato di capability negotiation; forza re-annuncio."""
+        self._peer_caps = None
+        self._caps_announced = False
+        self._caps_outbound_count = 0
 
 
 def apply_lut_updates(msg: str, lut: dict[str, str]) -> tuple[str, dict[str, str]]:
