@@ -92,3 +92,76 @@ def test_warmup_handles_session_prefixes():
     s.warmup([raw_with_prefix, raw_clean])
     # "engineering" appare 2 volte cumulative (1 in cleaned, 1 in raw)
     assert "engineering" in s._inv
+
+
+def test_warmup_respects_session_max_entries():
+    """Warmup non aggiunge mai più di session.max_entries."""
+    s = ADPSession(path=None, auto_save=False, k_threshold=2, max_entries=2)
+    # 5 strings distinte sopra threshold
+    long_words = ["administrator", "engineering", "developer", "operations", "marketing"]
+    messages = []
+    for w in long_words:
+        messages.append({"role": w})
+        messages.append({"role": w})  # ripeti per K=2
+    added = s.warmup(messages)
+    # Cap = 2: solo 2 entry massimo
+    assert len(s._entries) <= 2
+    assert added <= 2
+
+
+def test_warmup_respects_max_entries_override():
+    """Parametro max_entries usa min(session, override)."""
+    s = ADPSession(path=None, auto_save=False, k_threshold=2, max_entries=10)
+    long_words = ["administrator", "engineering", "developer", "operations", "marketing"]
+    messages = []
+    for w in long_words:
+        messages.append({"role": w})
+        messages.append({"role": w})
+    added = s.warmup(messages, max_entries=3)
+    assert len(s._entries) <= 3
+    assert added <= 3
+
+
+def test_warmup_prefers_more_frequent_candidates():
+    """A parità di altre condizioni, candidati più frequenti vengono prima.
+
+    Usiamo messaggi con chiavi univoche per evitare che la chiave stessa
+    (p.es. "role") accumuli conteggi e scalzi i valori dal cap.
+    """
+    s = ADPSession(path=None, auto_save=False, k_threshold=2, max_entries=2)
+    # Ogni messaggio ha chiave univoca (k0..k9) → le chiavi non si ripetono
+    # e non competono con i valori per il cap.
+    messages = [
+        {"k0": "engineering"},
+        {"k1": "engineering"},
+        {"k2": "engineering"},
+        {"k3": "engineering"},
+        {"k4": "engineering"},  # engineering: 5 occorrenze
+        {"k5": "administrator"},
+        {"k6": "administrator"},
+        {"k7": "administrator"},  # administrator: 3 occorrenze
+        {"k8": "developer"},
+        {"k9": "developer"},    # developer: 2 occorrenze (soglia)
+    ]
+    s.warmup(messages)
+    assert len(s._entries) == 2
+    # Le due più frequenti devono essere in LUT
+    assert "engineering" in s._inv
+    assert "administrator" in s._inv
+    # La meno frequente non c'è (escluso per cap)
+    assert "developer" not in s._inv
+
+
+def test_warmup_idempotent_no_duplicates():
+    """Ri-eseguire warmup con stesso input non duplica entry."""
+    s = ADPSession(path=None, auto_save=False, k_threshold=2)
+    messages = [
+        {"role": "administrator", "dept": "engineering"},
+        {"role": "administrator", "dept": "engineering"},
+    ]
+    first_added = s.warmup(messages)
+    entries_after_first = dict(s._entries)
+    second_added = s.warmup(messages)
+    # Nessuna entry nuova al secondo run
+    assert second_added == 0
+    assert s._entries == entries_after_first
