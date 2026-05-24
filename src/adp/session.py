@@ -177,6 +177,44 @@ class ADPSession:
         self._stats["evictions"] += 1
         return alias
 
+    def _count_candidates(self, obj: Any, counts: dict[str, int] | None = None) -> dict[str, int]:
+        """Conta occorrenze di chiavi dict e valori string scalari, ricorsivamente."""
+        if counts is None:
+            counts = {}
+        if isinstance(obj, dict):
+            for k, v in obj.items():
+                if isinstance(k, str):
+                    counts[k] = counts.get(k, 0) + 1
+                self._count_candidates(v, counts)
+        elif isinstance(obj, list):
+            for v in obj:
+                self._count_candidates(v, counts)
+        elif isinstance(obj, str):
+            counts[obj] = counts.get(obj, 0) + 1
+        # bool/int/float/None/bytes: ignorati
+        return counts
+
+    def _select_candidates(self, counts: dict[str, int]) -> dict[str, int]:
+        """Filtra candidati: soglia K, non in static LUT, saving char positivo."""
+        selected: dict[str, int] = {}
+        next_id = self._next_alias_id
+        for fullname, count in counts.items():
+            if count < self._k_threshold:
+                continue
+            if fullname in self._static_lut:
+                continue
+            if fullname in self._inv:
+                # Già in dynamic LUT: non re-aggiungere, ma il caller può bumpare LRU
+                continue
+            # Cost-benefit char-based
+            alias_len = len(f"_{next_id}")
+            header_entry_len = alias_len + 1 + len(fullname) + 1  # "_N=fullname;"
+            saving = count * len(fullname) - count * alias_len - header_entry_len
+            if saving >= 0:
+                selected[fullname] = count
+                next_id += 1  # simula incremento per stima alias futuri (approx)
+        return selected
+
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "DEFAULT_PATH", "SCHEMA_VERSION",
            "apply_lut_updates", "encode_with_dyn_lut"]

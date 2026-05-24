@@ -108,3 +108,66 @@ def test_lru_use_existing_then_eviction_keeps_used():
     s._add_entry("d")   # _3, evict _1 (meno recente)
     assert "_1" not in s._entries
     assert s._entries == {"_0": "a", "_2": "c", "_3": "d"}
+
+
+def test_candidate_count_keys_only():
+    s = ADPSession(path=None, auto_save=False)
+    obj = {
+        "user": {"id": 1, "role": "admin"},
+        "other": {"id": 2, "role": "admin"},
+    }
+    counts = s._count_candidates(obj)
+    # Conta chiavi: user 1, other 1, id 2, role 2
+    # Conta valori string: admin 2
+    assert counts["user"] == 1
+    assert counts["other"] == 1
+    assert counts["id"] == 2
+    assert counts["role"] == 2
+    assert counts["admin"] == 2
+
+
+def test_candidate_skips_non_string_values():
+    s = ADPSession(path=None, auto_save=False)
+    obj = {"a": 1, "b": True, "c": None, "d": "text", "e": 3.14}
+    counts = s._count_candidates(obj)
+    # Solo chiavi (a,b,c,d,e) e valori string ("text")
+    assert counts.get("text", 0) == 1
+    assert 1 not in counts  # nessun int
+    assert True not in counts  # nessun bool
+
+
+def test_candidate_recursive_into_lists():
+    s = ADPSession(path=None, auto_save=False)
+    obj = {"users": [{"id": 1, "name": "alice"}, {"id": 2, "name": "bob"}]}
+    counts = s._count_candidates(obj)
+    assert counts["id"] == 2
+    assert counts["name"] == 2
+
+
+def test_select_candidates_above_threshold():
+    s = ADPSession(path=None, max_entries=256, k_threshold=2, auto_save=False)
+    counts = {"admin": 3, "x": 1, "long_repeated_key": 5}
+    selected = s._select_candidates(counts)
+    # x sotto soglia esce
+    assert "x" not in selected
+    # admin e long_repeated_key passano la soglia
+    assert "admin" in selected
+    assert "long_repeated_key" in selected
+
+
+def test_select_candidates_skips_already_in_static_lut():
+    static = {"user": "u", "id": "i"}
+    s = ADPSession(path=None, static_lut=static, auto_save=False)
+    counts = {"user": 5, "admin": 3}
+    selected = s._select_candidates(counts)
+    assert "user" not in selected  # gestita da static
+    assert "admin" in selected
+
+
+def test_select_candidates_skips_negative_saving():
+    s = ADPSession(path=None, k_threshold=2, auto_save=False)
+    # "ok" (2 char) × 3 vs alias "_0" (2 char) + header "_0=ok;" (6 char)
+    # saving = 3*2 - 3*2 - 6 = -6 < 0 → escluso
+    counts = {"ok": 3}
+    selected = s._select_candidates(counts)
+    assert "ok" not in selected
