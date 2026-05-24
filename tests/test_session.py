@@ -171,3 +171,49 @@ def test_select_candidates_skips_negative_saving():
     counts = {"ok": 3}
     selected = s._select_candidates(counts)
     assert "ok" not in selected
+
+
+def test_encode_no_repeats_no_prefix():
+    s = ADPSession(path=None, auto_save=False)
+    msg = s.encode({"id": 42})
+    # Nessuna chiave ripetuta sopra soglia → nessun _lut_add
+    assert "_lut_add" not in msg
+    # Round-trip via standard adp.decode
+    import adp
+    assert adp.decode(msg) == {"id": 42}
+
+
+def test_encode_with_repeats_adds_prefix():
+    s = ADPSession(path=None, auto_save=False)
+    # Usa chiavi/valori abbastanza lunghi da superare il break-even del cost-benefit
+    obj = {
+        "user1": {"department": "engineering", "location": "headquarters"},
+        "user2": {"department": "engineering", "location": "headquarters"},
+    }
+    msg = s.encode(obj)
+    assert "_lut_add" in msg
+    # Dopo encode la LUT deve contenere "department" o "engineering" etc.
+    assert len(s._entries) >= 2
+
+
+def test_encode_substitutes_aliases_in_payload():
+    s = ADPSession(path=None, auto_save=False)
+    obj = {
+        "a": {"department": "engineering"},
+        "b": {"department": "engineering"},
+    }
+    msg = s.encode(obj)
+    # _0=department o _0=engineering deve apparire nel prefix
+    assert "department" in msg or "engineering" in msg  # in prefix
+    # Nel payload, almeno un alias _N deve essere usato
+    import re
+    assert re.search(r"_\d+=", msg) is not None
+
+
+def test_encode_no_lut_flag_bypasses():
+    s = ADPSession(path=None, auto_save=False)
+    obj = {"role": "admin", "role2": "admin"}
+    msg = s.encode(obj, no_lut=True)
+    assert "_lut_add" not in msg
+    # Anche con ripetizioni, no_lut bypassa la dynamic LUT
+    assert "admin" in msg  # valore bare, non sostituito

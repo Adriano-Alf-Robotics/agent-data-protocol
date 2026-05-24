@@ -215,6 +215,69 @@ class ADPSession:
                 next_id += 1  # simula incremento per stima alias futuri (approx)
         return selected
 
+    def encode(self, obj: Any, *, no_lut: bool = False) -> str:
+        """Encode obj a stringa ADP. Se no_lut=True bypassa dynamic LUT."""
+        if no_lut:
+            if self._static_lut:
+                return adp.encode(obj, key_lut=self._static_lut)
+            return adp.encode(obj)
+
+        # 1. Conta candidati
+        counts = self._count_candidates(obj)
+
+        # 2. Bumpa LRU per quelli già in dynamic LUT
+        for fullname in counts:
+            if fullname in self._inv:
+                self._mark_used(self._inv[fullname])
+
+        # 3. Seleziona nuovi candidati
+        new_candidates = self._select_candidates(counts)
+
+        # 4. Aggiungi entry per ognuno
+        new_aliases: dict[str, str] = {}  # alias -> fullname (per il prefix)
+        for fullname in new_candidates:
+            alias = self._add_entry(fullname)
+            new_aliases[alias] = fullname
+
+        # 5. Sostituisci nel payload (chiavi+valori string ricorrenti) usando
+        #    static LUT + dynamic LUT
+        substituted = self._substitute(obj)
+
+        # 6. Compone messaggio finale
+        payload_adp = adp.encode(substituted, key_lut=self._static_lut or None)
+        if not new_aliases:
+            return payload_adp
+
+        # Prefix: _lut_add={alias=fullname;...};payload
+        prefix_pairs = ";".join(f"{a}={self._quote_if_needed(f)}"
+                                for a, f in new_aliases.items())
+        prefix = f"_lut_add={{{prefix_pairs}}};"
+        return prefix + payload_adp
+
+    def _substitute(self, obj: Any) -> Any:
+        """Ricorsivamente sostituisci chiavi e valori string usando dynamic LUT."""
+        if isinstance(obj, dict):
+            out: dict[Any, Any] = {}
+            for k, v in obj.items():
+                new_k = self._inv.get(k, k) if isinstance(k, str) else k
+                out[new_k] = self._substitute(v)
+            return out
+        if isinstance(obj, list):
+            return [self._substitute(v) for v in obj]
+        if isinstance(obj, str):
+            return self._inv.get(obj, obj)
+        return obj
+
+    @staticmethod
+    def _quote_if_needed(s: str) -> str:
+        """Quote un valore se contiene caratteri ADP-speciali."""
+        if not s:
+            return '""'
+        if re.search(r"[\s,;=\[\]\{\}|\"#&~]", s):
+            escaped = s.replace("\\", "\\\\").replace('"', '\\"')
+            return f'"{escaped}"'
+        return s
+
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "DEFAULT_PATH", "SCHEMA_VERSION",
            "apply_lut_updates", "encode_with_dyn_lut"]
