@@ -1,7 +1,7 @@
 {
   "name": "adp",
   "version": "0.2.0",
-  "description": "ADP — Adriano Dal Pastro format. Token-efficient lossless serialization per agenti AI. Skill + slash commands + subagent + permission allowlist.",
+  "description": "ADP — Adriano Dal Pastro format. Token-efficient lossless serialization for AI agents. Skill + slash commands + subagent + permission allowlist.",
   "author": {
     "name": "Adriano Dal Pastro",
     "email": "adrianodalpastro@tielogic.com"

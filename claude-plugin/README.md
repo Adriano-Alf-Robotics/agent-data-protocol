@@ -1,39 +1,41 @@
-# ADP Plugin per Claude Code
+# ADP Plugin for Claude Code
 
-Plugin che integra **ADP** (Adriano Dal Pastro format) in Claude Code:
-skill, slash command, subagent dedicato, hook contestuale.
+Plugin that integrates **ADP** (Adriano Dal Pastro format) into Claude Code:
+skill, slash commands, dedicated subagent, contextual hook.
 
-ADP è un formato testuale di serializzazione lossless e
-token-efficient per la comunicazione tra agenti AI. Vedi
-[README principale](../README.md) per la spec, i benchmark e le API.
+ADP is a lossless, token-efficient text serialization format for
+communication between AI agents. See the [main README](../README.md)
+for the spec, benchmarks, and APIs.
 
-## Cosa fornisce il plugin
+> Italian version: [README.it.md](../README.it.md)
 
-| Componente | Cosa attiva | Dove |
+## What the plugin provides
+
+| Component | What it activates | Location |
 |---|---|---|
-| **Skill `adp`** | istruzione contestuale: quando serializzi dati strutturati usa ADP, non JSON | `skills/adp/SKILL.md` |
-| **Subagent `adp-agent`** | task delegabile che risponde *sempre* in ADP | `agents/adp-agent.md` |
-| **9 slash command** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt` | `commands/*.md` |
-| **Hook SessionStart** | annota i progetti ADP all'avvio sessione | `hooks/session-start.sh` |
+| **Skill `adp`** | contextual instruction: when serializing structured data use ADP, not JSON | `skills/adp/SKILL.md` |
+| **Subagent `adp-agent`** | delegatable task that *always* replies in ADP | `agents/adp-agent.md` |
+| **9 slash commands** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt` | `commands/*.md` |
+| **Hook SessionStart** | annotates ADP projects at session start | `hooks/session-start.sh` |
 
-## Prerequisiti
+## Prerequisites
 
-La CLI `adp` deve essere installata e raggiungibile. Due opzioni:
+The `adp` CLI must be installed and reachable. Two options:
 
 ```bash
-# Opzione A: nello stesso repo
+# Option A: within the same repo
 cd /path/to/GoalLanguageAgents
 uv sync --all-extras
-# i comandi useranno: uv run --directory /path/to/GoalLanguageAgents adp ...
+# commands will use: uv run --directory /path/to/GoalLanguageAgents adp ...
 
-# Opzione B: globale via pip / pipx
+# Option B: global via pip / pipx
 pipx install /path/to/GoalLanguageAgents
-# i comandi useranno: adp ...
+# commands will use: adp ...
 ```
 
-## Installazione del plugin
+## Plugin installation
 
-### Metodo 1 — link simbolico (sviluppo)
+### Method 1 — symbolic link (development)
 
 ```bash
 mkdir -p ~/.claude/plugins/cache/local
@@ -41,7 +43,7 @@ ln -sf /path/to/GoalLanguageAgents/claude-plugin \
        ~/.claude/plugins/cache/local/adp
 ```
 
-Modifica `~/.claude/plugins/installed_plugins.json` aggiungendo:
+Edit `~/.claude/plugins/installed_plugins.json` by adding:
 
 ```json
 {
@@ -49,7 +51,7 @@ Modifica `~/.claude/plugins/installed_plugins.json` aggiungendo:
 }
 ```
 
-### Metodo 2 — copia diretta
+### Method 2 — direct copy
 
 ```bash
 mkdir -p ~/.claude/plugins/cache/adp/0.2.0
@@ -57,55 +59,55 @@ cp -r /path/to/GoalLanguageAgents/claude-plugin/* \
       ~/.claude/plugins/cache/adp/0.2.0/
 ```
 
-### Metodo 3 — script automatico
+### Method 3 — automated script
 
 ```bash
 bash /path/to/GoalLanguageAgents/claude-plugin/install.sh
 ```
 
-## Verifica
+## Verification
 
-Apri una nuova sessione Claude Code e controlla:
+Open a new Claude Code session and check:
 
 ```
-/adp-encode    # dovrebbe apparire fra i comandi disponibili
+/adp-encode    # should appear among the available commands
 ```
 
-Oppure chiedi a Claude Code:
+Or ask Claude Code:
 
-> Mostrami la skill `adp` e l'agent `adp-agent`.
+> Show me the `adp` skill and the `adp-agent` agent.
 
-## Disinstallazione
+## Uninstallation
 
 ```bash
-rm ~/.claude/plugins/cache/local/adp        # se link simbolico
-# oppure
-rm -rf ~/.claude/plugins/cache/adp           # se copia diretta
+rm ~/.claude/plugins/cache/local/adp        # if symbolic link
+# or
+rm -rf ~/.claude/plugins/cache/adp           # if direct copy
 ```
 
-Rimuovi anche la voce da `~/.claude/plugins/installed_plugins.json`.
+Also remove the entry from `~/.claude/plugins/installed_plugins.json`.
 
-## Aggiornamenti
+## Updates
 
-Se hai installato via link simbolico (metodo 1), basta aggiornare il
-repository ADP — il plugin segue automaticamente.
+If you installed via symbolic link (method 1), simply update the
+ADP repository — the plugin follows automatically.
 
-Per copia diretta, ri-esegui `install.sh` o aggiorna manualmente.
+For a direct copy, re-run `install.sh` or update manually.
 
-## Caso d'uso tipico
+## Typical use case
 
 ```
-> Estrai dal file customers.csv una lista di utenti con id, name, email,
+> Extract from the file customers.csv a list of users with id, name, email,
 > in ADP.
 
-Claude Code → invoca il subagent adp-agent →
-adp-agent ritorna:
+Claude Code → invokes the adp-agent subagent →
+adp-agent returns:
   users=#id,name,email|1i,Alice,alice@x.io|2,Bob,bob@x.io|3,Carla,carla@x.io
 
-Claude Code → mostra la stringa, suggerisce di salvarla con Write o di
-              decodificarla con /adp-decode.
+Claude Code → displays the string, suggests saving it with Write or
+              decoding it with /adp-decode.
 ```
 
-## Licenza
+## License
 
-MIT, vedi `LICENSE` nel repository principale.
+MIT, see `LICENSE` in the main repository.

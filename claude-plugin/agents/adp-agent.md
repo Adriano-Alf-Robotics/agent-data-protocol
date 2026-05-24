@@ -43,9 +43,9 @@ No whitespace required between tokens; only inside quoted strings.
 | Input concept | ADP output |
 |---|---|
 | user with id 42 and name Adriano, active | `user={id=42;name=Adriano;active=1}` |
-| list of tags with spaces | `tags=[admin,root,"user con spazio"]` |
+| list of tags with spaces | `tags=[admin,root,"user with space"]` |
 | table of 2 metrics | `metrics=#id,value,unit\|1i,42.0,kg\|2,3.14,m` |
-| multi-line report | `report="Riga 1\nRiga 2 con \"virgolette\"\nRiga 3"` (newlines literal in source, no \n escape needed) |
+| multi-line report | `report="Line 1\nLine 2 with \"quotes\"\nLine 3"` (newlines literal in source, no \n escape needed) |
 | email + url + path | `contact={email=ops@acme.example;url=https://acme.example/api;file=src/x.py}` |
 | binary thumbnail | `thumb=b!iVBORw0KGgo=` |
 | nested table | `users=#id,roles\|1i,[admin,ops]\|2,[dev]` |

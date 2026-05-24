@@ -102,12 +102,12 @@ s = adp.encode({"task": "x", "items": [1, 2, 3]})
 obj = adp.decode(s)
 # {"task": "x", "items": [1, 2, 3]}
 
-# Convertitori
-adp.to_json(s)          # JSON canonico
-adp.to_markdown(s)      # Markdown leggibile
-adp.to_html(s)          # HTML standalone
+# Converters
+adp.to_json(s)          # canonical JSON
+adp.to_markdown(s)      # human-readable Markdown
+adp.to_html(s)          # standalone HTML
 
-# Estensioni
+# Extensions
 adp.encode(obj, key_lut=adp.DEFAULT_AGENT_LUT)   # +7-14% extra saving
 adp.integrity.sign(s, algo="sha256")              # tamper detection
 adp.tpd.learn_lut(text)                            # phrase compression

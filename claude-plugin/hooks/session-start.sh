@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # ADP plugin SessionStart hook
 #
-# Stampa una nota contestuale all'avvio di una sessione Claude Code in
-# un progetto che dichiara di usare ADP. Il segnale e' la presenza di
-# un file `.adp-project` nella root del progetto OPPURE l'import della
-# libreria adp in pyproject.toml.
+# Prints a contextual note at the start of a Claude Code session in
+# a project that declares it uses ADP. The signal is the presence of
+# a `.adp-project` file in the project root OR the import of the adp
+# library in pyproject.toml.
 #
-# Output minimal: una riga. Per il prompt completo l'utente invoca
-# /adp-prompt esplicitamente.
+# Minimal output: one line. For the full prompt the user invokes
+# /adp-prompt explicitly.
 
 set -euo pipefail
 
-# Cerca i marcatori nella directory corrente
+# Look for markers in the current directory
 if [ -f ".adp-project" ] || grep -q '"adp"' pyproject.toml 2>/dev/null; then
     cat <<'EOF'
-ADP plugin: questo progetto usa il formato ADP per la serializzazione
-inter-agente. Usa `adp.encode/decode` (Python) o i comandi /adp-encode,
+ADP plugin: this project uses ADP format for inter-agent serialization.
+Use `adp.encode/decode` (Python) or the commands /adp-encode,
 /adp-decode, /adp-to-md, /adp-to-html, /adp-bench, /adp-sign, /adp-verify.
-Per la skill completa: vedi `adp` skill in questo plugin.
+For the full skill reference: see the `adp` skill in this plugin.
 EOF
 fi
