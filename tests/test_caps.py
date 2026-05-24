@@ -114,3 +114,41 @@ def test_encode_no_degrade_if_peer_caps_received():
     msg = s.encode({"role2": "administrator", "role3": "administrator"})
     # Verifica indiretta: "administrator" è sostituito da alias _N
     assert "administrator" not in msg
+
+
+def test_caps_round_trip_two_aware_sessions():
+    """Due ADPSession aware: handshake bidirezionale popola entrambi peer_caps."""
+    a = ADPSession(path=None, auto_save=False, announce_caps=True)
+    b = ADPSession(path=None, auto_save=False, announce_caps=True)
+
+    # A invia primo msg con _caps=
+    msg_a_to_b = a.encode({"task": "ping"})
+    assert "_caps=" in msg_a_to_b
+    b.decode(msg_a_to_b)
+    # B ora conosce A
+    assert b.peer_caps is not None
+
+    # B risponde con il suo _caps=
+    msg_b_to_a = b.encode({"task": "pong"})
+    assert "_caps=" in msg_b_to_a
+    a.decode(msg_b_to_a)
+    # A ora conosce B
+    assert a.peer_caps is not None
+
+    # Da qui in poi, nessuno annuncia più caps
+    msg_a_2 = a.encode({"task": "data"})
+    assert "_caps=" not in msg_a_2
+
+
+def test_reset_caps_forces_reannounce():
+    """Dopo reset_caps, encode emette di nuovo _caps= al prossimo msg."""
+    s = ADPSession(path=None, auto_save=False, announce_caps=True)
+    s.encode({"a": 1})  # primo annuncio
+    assert s._caps_announced is True
+    msg2 = s.encode({"b": 2})
+    assert "_caps=" not in msg2
+
+    s.reset_caps()
+    msg3 = s.encode({"c": 3})
+    # Dopo reset, ri-annuncia caps
+    assert "_caps=" in msg3
