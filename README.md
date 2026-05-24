@@ -413,6 +413,39 @@ Con warm-start (pre-popolazione della LUT da log di sessione passata via
 `session.warmup(messages_log)`), la seconda metà di una conversazione
 risparmia ulteriormente ~6% rispetto al cold-start.
 
+### Benchmark comprehensive: 7 workload × 4 lunghezze
+
+Oltre al benchmark singolo qui sopra, una suite più ampia copre sette
+workload diversi (status polling, tool use, narrative, ETL pipeline,
+broadcast, DB query, mixed) a quattro lunghezze di conversazione
+(10/50/100/500 messaggi), con stima costo $ per provider e latenza
+encode/decode.
+
+Sintesi @ 100 msg per workload — ADP full stack vs TOON (best competitor):
+
+| Workload | Δ vs TOON | Risparmio $ per 1k msg (Sonnet 4.6) |
+|---|---:|---:|
+| status_polling | **+61.1%** | $0.156 |
+| etl_pipeline | **+60.2%** | $2.61 |
+| mixed | **+49.8%** | $0.418 |
+| db_query_response | **+18.8%** | $0.114 |
+| tool_use | **+15.3%** | $0.019 |
+| multi_agent_broadcast | **+11.3%** | $0.015 |
+| long_narrative | +1.3% | $0.003 |
+
+Il guadagno è massimo sui workload con alta similarità inter-message
+(status polling) o forte struttura tabulare (ETL pipeline). Sul testo
+prosa libero (long_narrative) il margine è minimo perché diff/dyn LUT
+hanno poco materiale ricorrente da catturare.
+
+Report completo con tutte le lunghezze, latenza, pricing per provider:
+[`benchmarks/comprehensive_report.md`](benchmarks/comprehensive_report.md).
+Generabile con:
+
+```bash
+uv run --with toon-py --with tiktoken python -m benchmarks.bench_comprehensive
+```
+
 Il guadagno principale arriva dal diff encoding: su pattern request/reply
 con payload simili tra messaggi successivi, il delta è una frazione minima
 del payload completo. La dynamic LUT cold-start da sola non è
