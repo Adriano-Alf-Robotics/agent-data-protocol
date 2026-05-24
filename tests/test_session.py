@@ -64,3 +64,47 @@ def test_persistence_atomic_write_uses_temp_file(tmp_path: Path):
     # Nessun file temp residuo
     leftovers = list(tmp_path.glob("*.tmp"))
     assert leftovers == []
+
+
+def test_lru_add_entry_increments_alias_id():
+    s = ADPSession(path=None, auto_save=False)
+    alias = s._add_entry("admin")
+    assert alias == "_0"
+    assert s._entries == {"_0": "admin"}
+    assert s._lru_order == ["_0"]
+    assert s._next_alias_id == 1
+
+
+def test_lru_add_existing_returns_same_alias_and_bumps():
+    s = ADPSession(path=None, auto_save=False)
+    s._add_entry("admin")
+    s._add_entry("dev")
+    # Re-using "admin" deve restituire stesso alias e bumpare in LRU
+    alias = s._mark_used("_0")
+    assert alias == "_0"
+    assert s._lru_order == ["_1", "_0"]
+
+
+def test_lru_eviction_when_full(tmp_path):
+    s = ADPSession(path=None, max_entries=3, auto_save=False)
+    s._add_entry("a")
+    s._add_entry("b")
+    s._add_entry("c")
+    assert len(s._entries) == 3
+    s._add_entry("d")
+    # "a" era il meno recente, dovrebbe essere evicted
+    assert "_0" not in s._entries  # _0 era "a"
+    assert s._entries == {"_1": "b", "_2": "c", "_3": "d"}
+    assert s._lru_order == ["_1", "_2", "_3"]
+    assert s._stats["evictions"] == 1
+
+
+def test_lru_use_existing_then_eviction_keeps_used():
+    s = ADPSession(path=None, max_entries=3, auto_save=False)
+    s._add_entry("a")  # _0
+    s._add_entry("b")  # _1
+    s._add_entry("c")  # _2
+    s._mark_used("_0")  # promote _0 a most-recent
+    s._add_entry("d")   # _3, evict _1 (meno recente)
+    assert "_1" not in s._entries
+    assert s._entries == {"_0": "a", "_2": "c", "_3": "d"}

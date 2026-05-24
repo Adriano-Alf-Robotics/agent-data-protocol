@@ -138,6 +138,45 @@ class ADPSession:
         except Exception:
             pass  # atexit: mai sollevare
 
+    def _add_entry(self, fullname: str) -> str:
+        """Aggiungi nuovo entry alla LUT dinamica. Ritorna alias assegnato.
+
+        Se LUT piena: evict LRU front prima.
+        Se fullname già presente: ritorna alias esistente e lo bumpa.
+        """
+        if fullname in self._inv:
+            existing = self._inv[fullname]
+            self._mark_used(existing)
+            return existing
+
+        if len(self._entries) >= self._max_entries:
+            self._evict_lru()
+
+        alias = f"_{self._next_alias_id}"
+        self._next_alias_id += 1
+        self._entries[alias] = fullname
+        self._inv[fullname] = alias
+        self._lru_order.append(alias)
+        return alias
+
+    def _mark_used(self, alias: str) -> str:
+        """Bumpa alias a most-recently-used. Ritorna alias (per chaining)."""
+        if alias in self._lru_order:
+            self._lru_order.remove(alias)
+            self._lru_order.append(alias)
+        return alias
+
+    def _evict_lru(self) -> str | None:
+        """Rimuovi l'entry meno recente. Ritorna alias rimosso o None se LUT vuota."""
+        if not self._lru_order:
+            return None
+        alias = self._lru_order.pop(0)
+        fullname = self._entries.pop(alias, None)
+        if fullname is not None:
+            self._inv.pop(fullname, None)
+        self._stats["evictions"] += 1
+        return alias
+
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "DEFAULT_PATH", "SCHEMA_VERSION",
            "apply_lut_updates", "encode_with_dyn_lut"]
