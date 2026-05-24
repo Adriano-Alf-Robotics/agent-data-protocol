@@ -217,3 +217,56 @@ def test_encode_no_lut_flag_bypasses():
     assert "_lut_add" not in msg
     # Anche con ripetizioni, no_lut bypassa la dynamic LUT
     assert "admin" in msg  # valore bare, non sostituito
+
+
+def test_decode_without_prefix():
+    s = ADPSession(path=None, auto_save=False)
+    import adp
+    msg = adp.encode({"id": 42})
+    out = s.decode(msg)
+    assert out == {"id": 42}
+
+
+def test_decode_applies_lut_add():
+    s = ADPSession(path=None, auto_save=False)
+    msg = "_lut_add={_0=admin;_1=role};u={_1=_0;name=alice}"
+    out = s.decode(msg)
+    # Dopo decode, lut deve contenere le nuove entry
+    assert s._entries == {"_0": "admin", "_1": "role"}
+    # Payload espanso correttamente
+    assert out == {"u": {"role": "admin", "name": "alice"}}
+
+
+def test_decode_round_trip_two_sessions():
+    a = ADPSession(path=None, auto_save=False)
+    b = ADPSession(path=None, auto_save=False)
+
+    obj = {
+        "user": {"role": "administrator", "dept": "engineering"},
+        "user2": {"role": "administrator", "dept": "engineering"},
+    }
+    msg = a.encode(obj)
+    out = b.decode(msg)
+    assert out == obj
+    # Stato LUT sincronizzato
+    assert a._entries == b._entries
+    assert a._lru_order == b._lru_order
+
+
+def test_decode_unknown_alias_raises_sync_error():
+    s = ADPSession(path=None, auto_save=False)
+    msg = "_0={id=42}"  # _0 non in lut
+    with pytest.raises(ADPLUTSyncError) as exc_info:
+        s.decode(msg)
+    assert exc_info.value.alias == "_0"
+
+
+def test_decode_lut_reset_clears_state():
+    s = ADPSession(path=None, auto_save=False)
+    s._add_entry("admin")  # _0=admin
+    s._add_entry("dev")    # _1=dev
+    msg = "_lut_reset=1;id=42"
+    out = s.decode(msg)
+    assert s._entries == {}
+    assert s._lru_order == []
+    assert out == {"id": 42}

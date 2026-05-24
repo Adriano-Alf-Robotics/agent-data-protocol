@@ -278,6 +278,145 @@ class ADPSession:
             return f'"{escaped}"'
         return s
 
+    # ------------------------------------------------------------------
+    # decode() e metodi helper
+    # ------------------------------------------------------------------
+
+    _RESERVED_KEYS = ("_lut_reset", "_lut_add")
+
+    def decode(self, msg: str) -> Any:
+        """Decode messaggio ADP. Applica prefissi _lut_reset/_lut_add se presenti,
+        poi espande alias dynamic LUT nel payload risultante."""
+        rest = msg
+        seen: set[str] = set()
+        while True:
+            prefix_match = self._match_reserved_prefix(rest)
+            if prefix_match is None:
+                break
+            key, value_str, consumed = prefix_match
+            if key in seen:
+                raise adp.ADPParseError(f"Prefisso duplicato: {key!r}")
+            seen.add(key)
+            if key == "_lut_reset":
+                if value_str not in ("0", "1"):
+                    raise adp.ADPParseError(
+                        f"_lut_reset valore invalido: {value_str!r}")
+                if value_str == "1":
+                    self._apply_lut_reset()
+            elif key == "_lut_add":
+                self._apply_lut_add(value_str)
+            rest = rest[consumed:]
+
+        if not rest:
+            return {}
+        payload = adp.decode(rest, key_lut=self._static_lut or None)
+        return self._expand(payload)
+
+    def _match_reserved_prefix(self, s: str) -> tuple[str, str, int] | None:
+        """Se `s` inizia con `<reserved_key>=<value>;`, ritorna
+        (key, value_str, num_chars_consumed). Altrimenti None.
+
+        Il valore può essere una mappa `{...}` con `;` interni: facciamo
+        parentesi-tracking per trovare il `;` top-level finale.
+        """
+        for key in self._RESERVED_KEYS:
+            head = f"{key}="
+            if s.startswith(head):
+                value_start = len(head)
+                end = self._find_top_level_semicolon(s, value_start)
+                if end is None:
+                    return None
+                value_str = s[value_start:end]
+                return (key, value_str, end + 1)
+        return None
+
+    @staticmethod
+    def _find_top_level_semicolon(s: str, start: int) -> int | None:
+        """Trova il primo `;` a profondità zero (fuori da `{}`, `[]`, `""`).
+        Ritorna l'indice del `;` o None se non trovato."""
+        depth = 0
+        in_string = False
+        i = start
+        while i < len(s):
+            c = s[i]
+            if in_string:
+                if c == "\\" and i + 1 < len(s):
+                    i += 2
+                    continue
+                if c == '"':
+                    in_string = False
+            else:
+                if c == '"':
+                    in_string = True
+                elif c in "{[":
+                    depth += 1
+                elif c in "}]":
+                    depth -= 1
+                elif c == ";" and depth == 0:
+                    return i
+            i += 1
+        return None
+
+    def _apply_lut_reset(self) -> None:
+        self._entries.clear()
+        self._inv.clear()
+        self._lru_order.clear()
+        # next_alias_id NON resettato: garantisce uniqueness storica
+
+    def _apply_lut_add(self, value_str: str) -> None:
+        """value_str è `{alias=fullname;alias=fullname}` (con graffe)."""
+        if not (value_str.startswith("{") and value_str.endswith("}")):
+            raise adp.ADPParseError(f"_lut_add value malformed: {value_str!r}")
+        mapping = adp.decode(f"m={value_str}")
+        if not isinstance(mapping, dict) or "m" not in mapping:
+            raise adp.ADPParseError(f"_lut_add value not a mapping: {value_str!r}")
+        for alias, fullname in mapping["m"].items():
+            if not isinstance(alias, str) or not isinstance(fullname, str):
+                raise adp.ADPParseError(
+                    f"_lut_add entry malformed: {alias!r}={fullname!r}")
+            if alias in self._entries:
+                continue  # idempotente
+            if len(self._entries) >= self._max_entries:
+                self._evict_lru()
+            self._entries[alias] = fullname
+            self._inv[fullname] = alias
+            self._lru_order.append(alias)
+            # Tieni next_alias_id sincronizzato (massimo + 1)
+            try:
+                num = int(alias.lstrip("_"))
+                if num >= self._next_alias_id:
+                    self._next_alias_id = num + 1
+            except ValueError:
+                pass
+
+    def _expand(self, obj: Any) -> Any:
+        """Espandi alias dynamic LUT nelle chiavi e valori string del payload."""
+        if isinstance(obj, dict):
+            out: dict[Any, Any] = {}
+            for k, v in obj.items():
+                new_k = self._expand_token(k) if isinstance(k, str) else k
+                out[new_k] = self._expand(v)
+            return out
+        if isinstance(obj, list):
+            return [self._expand(v) for v in obj]
+        if isinstance(obj, str):
+            return self._expand_token(obj)
+        return obj
+
+    def _expand_token(self, token: str) -> str:
+        """Se token è un alias `_N` in dynamic LUT, espandi a fullname.
+        Se è un alias `_N` MA non in LUT, solleva ADPLUTSyncError.
+        Altrimenti ritorna token invariato."""
+        if not (token.startswith("_") and len(token) > 1):
+            return token
+        if token[1:].isdigit():
+            if token in self._entries:
+                self._stats["hit_count"] += 1
+                self._mark_used(token)
+                return self._entries[token]
+            raise ADPLUTSyncError(token)
+        return token
+
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "DEFAULT_PATH", "SCHEMA_VERSION",
            "apply_lut_updates", "encode_with_dyn_lut"]
