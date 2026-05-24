@@ -61,3 +61,25 @@ def test_encode_announce_caps_false_skips_prefix():
     msg = s.encode({"a": 1})
     assert "_caps=" not in msg
     assert s._caps_announced is False
+
+
+def test_decode_extracts_caps_and_populates_peer_caps():
+    """Receiver decode msg con _caps=, popola peer_caps."""
+    sender = ADPSession(path=None, auto_save=False, announce_caps=True)
+    receiver = ADPSession(path=None, auto_save=False, announce_caps=False)
+    msg = sender.encode({"a": 1})
+    out = receiver.decode(msg)
+    assert out == {"a": 1}  # payload decodificato correttamente
+    assert receiver.peer_caps is not None
+    assert receiver.peer_caps.get("dyn_lut") == 1
+    assert receiver.peer_caps.get("max_entries") == 256
+
+
+def test_decode_caps_idempotent_subsequent_msgs():
+    """Decoded msg senza _caps non altera peer_caps esistente."""
+    sender = ADPSession(path=None, auto_save=False, announce_caps=True)
+    receiver = ADPSession(path=None, auto_save=False, announce_caps=False)
+    receiver.decode(sender.encode({"a": 1}))
+    caps_before = dict(receiver.peer_caps)
+    receiver.decode(sender.encode({"b": 2}))
+    assert receiver.peer_caps == caps_before

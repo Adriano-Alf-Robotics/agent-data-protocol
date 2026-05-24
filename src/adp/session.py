@@ -525,7 +525,7 @@ class ADPSession:
     # decode() e metodi helper
     # ------------------------------------------------------------------
 
-    _RESERVED_KEYS = ("_lut_reset", "_lut_add", "_diff_reset", "_base", "_diff")
+    _RESERVED_KEYS = ("_caps", "_lut_reset", "_lut_add", "_diff_reset", "_base", "_diff")
 
     def decode(self, msg: str) -> Any:
         """Decode messaggio ADP. Applica nell'ordine:
@@ -548,7 +548,14 @@ class ADPSession:
             if key in seen:
                 raise adp.ADPParseError(f"Prefisso duplicato: {key!r}")
             seen.add(key)
-            if key == "_lut_reset":
+            if key == "_caps":
+                # Parsa il valore come mappa ADP
+                caps_payload_str = f"c={value_str}"
+                parsed_caps = adp.decode(caps_payload_str,
+                                         key_lut=self._static_lut or None)
+                if isinstance(parsed_caps, dict) and "c" in parsed_caps:
+                    self._peer_caps = parsed_caps["c"]
+            elif key == "_lut_reset":
                 if value_str not in ("0", "1"):
                     raise adp.ADPParseError(
                         f"_lut_reset valore invalido: {value_str!r}")
