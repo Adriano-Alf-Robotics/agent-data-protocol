@@ -766,8 +766,27 @@ class ADPSession:
         """
         if not self._tpd_buffer:
             return []
-        # Stub Task 1: implementazione completa in Task 3
-        return []
+        # Import locale per evitare overhead se TPD non usato
+        from adp import tpd
+
+        concatenated = "\n".join(self._tpd_buffer)
+        try:
+            learned = tpd.learn_lut(
+                concatenated,
+                max_codes=self._tpd_promote_max_per_run,
+            )
+        except Exception:
+            return []
+
+        added: list[str] = []
+        for phrase in learned:
+            if not phrase or phrase in self._static_lut or phrase in self._inv:
+                continue
+            if len(self._entries) >= self._max_entries:
+                break
+            alias = self._add_entry(phrase)
+            added.append(alias)
+        return added
 
     def stats(self) -> dict:
         """Dict diagnostico."""
