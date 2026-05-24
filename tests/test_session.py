@@ -354,3 +354,52 @@ def test_concurrent_save_no_corruption(tmp_path):
     # File parsabile
     data = json.loads(path.read_text())
     assert data["version"] == 1
+
+
+def test_round_trip_20_messages_two_agents(tmp_path):
+    """Scambio bidirezionale 20 messaggi, LUT cresce, decode resta consistente."""
+    a_path = tmp_path / "a.json"
+    b_path = tmp_path / "b.json"
+    a = ADPSession(path=a_path, max_entries=32, auto_save=False)
+    b = ADPSession(path=b_path, max_entries=32, auto_save=False)
+
+    payloads = []
+    for i in range(20):
+        if i % 2 == 0:
+            obj = {
+                "user": {"id": i, "role": "administrator", "dept": "engineering"},
+                "user2": {"id": i + 100, "role": "administrator", "dept": "engineering"},
+                "metadata": {"src": "agent_aaaa", "src2": "agent_aaaa"},
+            }
+            sender, receiver = a, b
+        else:
+            obj = {
+                "status": "successful",
+                "status2": "successful",
+                "result": {"value": i, "kind": "reportreport", "kind2": "reportreport"},
+            }
+            sender, receiver = b, a
+        msg = sender.encode(obj)
+        out = receiver.decode(msg)
+        assert out == obj, f"mismatch at msg {i}"
+        payloads.append(obj)
+
+    # Stati LUT sincronizzati
+    assert a._entries == b._entries
+    assert a._lru_order == b._lru_order
+
+
+def test_persistence_after_long_session(tmp_path):
+    """Save dopo 20 msg, reload, encode/decode usa stato persistito."""
+    path = tmp_path / "lut.json"
+    s = ADPSession(path=path, max_entries=32, auto_save=False)
+    for i in range(20):
+        s.encode({"user": {"id": i, "role": "administrator"},
+                  "u2": {"id": i + 1, "role": "administrator"}})
+    s.save()
+    entries_before = dict(s._entries)
+    lru_before = list(s._lru_order)
+
+    s2 = ADPSession(path=path, max_entries=32, auto_save=False)
+    assert s2._entries == entries_before
+    assert s2._lru_order == lru_before
