@@ -165,3 +165,46 @@ def test_warmup_idempotent_no_duplicates():
     # Nessuna entry nuova al secondo run
     assert second_added == 0
     assert s._entries == entries_after_first
+
+
+def test_warmup_then_encode_uses_prewarmed_entries():
+    """Dopo warmup, encode di un nuovo msg usa subito gli alias pre-popolati
+    senza dover aspettare K occorrenze nel msg corrente."""
+    sender = ADPSession(path=None, auto_save=False, k_threshold=2)
+    # Pre-warm da log
+    past_messages = [
+        {"user": {"role": "administrator", "dept": "engineering"}},
+        {"user": {"role": "administrator", "dept": "engineering"}},
+    ]
+    sender.warmup(past_messages)
+    pre_warmed = set(sender._inv.keys())
+    assert "administrator" in pre_warmed
+    assert "engineering" in pre_warmed
+
+    # Nuovo msg con UNA sola occorrenza di "administrator" e "engineering"
+    # (sotto K=2 nel msg corrente, ma già in LUT dal warmup → sostituito)
+    msg = sender.encode({"new_user": {"role": "administrator",
+                                       "dept": "engineering"}})
+    # I valori sono stati sostituiti con alias
+    assert "administrator" not in msg
+    assert "engineering" not in msg
+    # Almeno un alias _N presente
+    import re
+    assert re.search(r"_\d+", msg) is not None
+
+
+def test_warmup_persistence_round_trip(tmp_path: Path):
+    """Save dopo warmup, reload, le entry sono persistite."""
+    path = tmp_path / "session.json"
+    s1 = ADPSession(path=path, auto_save=False, k_threshold=2)
+    s1.warmup([
+        {"role": "administrator", "dept": "engineering"},
+        {"role": "administrator", "dept": "engineering"},
+    ])
+    s1.save()
+    entries_before = dict(s1._entries)
+    next_id_before = s1._next_alias_id
+
+    s2 = ADPSession(path=path, auto_save=False)
+    assert s2._entries == entries_before
+    assert s2._next_alias_id == next_id_before
