@@ -24,9 +24,9 @@ di dati.
 | Tabella omogenea (it) | 333 | 164 | **+50,8%** |
 | Lista contatti con URL/email | 145 | 94 | **+35,2%** |
 | Tabelle con cells annidate | 100 | 75 | **+25,0%** |
-| Conversazione 20 msg agent-to-agent (full stack) | 2079 | **897** | **+56,9%** |
+| Conversazione 20 msg agent-to-agent (full stack) | 2079 | **908** | **+56,3%** |
 
-L'ultima riga è ottenuta con `ADPSession` (dynamic LUT HPACK-style + differential encoding inter-message). Sullo stesso payload, **TOON** richiede 2249 token: ADP è **2,5× più economico di TOON** in scenari multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding) per dettagli.
+L'ultima riga è ottenuta con `ADPSession` (dynamic LUT HPACK-style + differential encoding inter-message + capability negotiation + TPD auto-promotion + tokenizer-aware cost). Sullo stesso payload, **TOON** richiede 2249 token: ADP è **2,5× più economico di TOON** in scenari multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding) per dettagli.
 
 ## Indice
 
@@ -403,10 +403,15 @@ strutturato (annidamento dict + lista di eventi):
 | **TOON** | **2249** | **−8,2%** | baseline |
 | ADP base (no LUT) | 1903 | +8,5% | +15,4% |
 | ADP + static LUT (`DEFAULT_AGENT_LUT`) | 1833 | +11,8% | +18,5% |
-| ADP + dynamic LUT (cold) | 2037 | +2,0% | +9,4% |
-| ADP + dynamic + static LUT | 1856 | +10,7% | +17,5% |
-| ADP + dynamic LUT + diff encoding | 943 | +54,6% | +58,1% |
-| **ADP full stack (static + dynamic + diff)** | **897** | **+56,9%** | **+60,1%** |
+| ADP + dynamic LUT (cold) | 2071 | +0,4% | +7,9% |
+| ADP + dynamic + static LUT | 1890 | +9,1% | +16,0% |
+| ADP + dynamic LUT + diff encoding | 977 | +53,0% | +56,6% |
+| ADP + full stack (static + dynamic + diff) | 931 | +55,2% | +58,6% |
+| **ADP full stack + tokenizer-aware cost** | **908** | **+56,3%** | **+59,6%** |
+
+Con warm-start (pre-popolazione della LUT da log di sessione passata via
+`session.warmup(messages_log)`), la seconda metà di una conversazione
+risparmia ulteriormente ~6% rispetto al cold-start.
 
 Il guadagno principale arriva dal diff encoding: su pattern request/reply
 con payload simili tra messaggi successivi, il delta è una frazione minima
@@ -435,20 +440,48 @@ uv run --with toon-py --with tiktoken python -m benchmarks.bench_dynamic_lut
 
 ```python
 session = adp.ADPSession(
+    # Core
     path="~/.adp/lut_state.json",  # None = in-memory; env ADP_LUT_PATH override
     max_entries=256,               # bound LRU
     static_lut=adp.DEFAULT_AGENT_LUT,
     k_threshold=2,                 # quante occorrenze in msg per aggiungere entry
+    auto_save=True,                # persistenza atexit
+    # Diff encoding
     enable_diff=True,              # disabilita per messaggi stateless
     diff_threshold=0.7,            # diff usato solo se len < 0.7 * full
-    auto_save=True,                # persistenza atexit
+    # Tokenizer-aware cost (opzionale, richiede tiktoken)
+    cost_estimator=adp.TokenizerCostEstimator("cl100k_base"),
+    # Capability negotiation
+    announce_caps=True,            # annuncia _caps={...} al primo msg
+    caps_timeout_msgs=3,           # auto-degrade dopo N send senza peer_caps
+    # TPD auto-promotion (Phrase learning durante sessione)
+    tpd_promote_every=10,          # 0 = disabilitato
+    tpd_promote_max_per_run=10,    # cap entry promosse per giro
 )
+
+# Pre-warm da corpus passato (accelera bootstrap)
+session.warmup(past_messages_log)
+
+# Recovery dopo sync error
+try:
+    obj = session.decode(received)
+except (adp.ADPLUTSyncError, adp.ADPDiffSyncError):
+    msg = session.encode_full(payload)  # forza re-send completo
 ```
 
-API completa: `encode`, `decode`, `encode_full`, `encode_reset`, `reset`,
-`save`, `stats`. Helper stateless: `apply_lut_updates`, `encode_with_dyn_lut`.
+API completa: `encode`, `encode_full`, `encode_reset`, `decode`, `reset`,
+`reset_caps`, `save`, `stats`, `warmup`, `_run_tpd_promotion`,
+property `peer_caps`. Helper stateless: `apply_lut_updates`,
+`encode_with_dyn_lut`. Estimator standalone: `TokenizerCostEstimator`,
+`estimate_cost`.
+
 Vedi il modulo `src/adp/session.py` e la spec di design in
 [`docs/superpowers/specs/2026-05-24-dynamic-lut-design.md`](docs/superpowers/specs/2026-05-24-dynamic-lut-design.md).
+
+Optional extra per cost-benefit preciso:
+```bash
+pip install adp[tokenizer]   # aggiunge tiktoken
+```
 
 ## Riduzione token misurata
 
@@ -996,13 +1029,11 @@ La libreria core non ha dipendenze runtime oltre alla stdlib.
 
 ## Roadmap
 
-- **v0.3 (corrente)** — **dynamic LUT HPACK-style + differential encoding**:
-  `ADPSession` con state evolutivo persistito, sincronizzazione in-band,
-  diff inter-message. Riduce i token del 60% rispetto a TOON su workload
+- **v0.3.5 (corrente)** — **`ADPSession` completo**: dynamic LUT
+  HPACK-style, differential encoding inter-message, capability negotiation
+  con auto-degrade, tokenizer-aware cost estimation, pre-warm da corpus,
+  TPD auto-promotion. Riduce i token del ~60% rispetto a TOON su workload
   multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding).
-- **v0.3.5 (in lavorazione)** — estensioni `ADPSession`: tokenizer-aware
-  cost estimation, capability negotiation tra agenti, pre-warm da corpus
-  passato, auto-promozione TPD→dynamic LUT.
 - **v0.4** — envelope opzionale (`from`, `to`, `id`, `intent`, `reply_to`)
   per protocolli inter-agente espliciti.
 - **v0.5** — schema/contract opzionale, codegen Pydantic.
