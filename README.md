@@ -63,8 +63,22 @@ machine-readable structure.
 
 ## Installation
 
+> **⚠️ Not on PyPI.** A `pip install adp` package exists on PyPI but is unrelated to this project. Install from source only.
+
+**Option 1 — development (recommended, requires [uv](https://docs.astral.sh/uv/)):**
+
 ```bash
+git clone https://github.com/AdrianoDalPastro/GoalLanguageAgents.git
+cd GoalLanguageAgents
 uv sync --all-extras
+```
+
+**Option 2 — pip from local clone or GitHub:**
+
+```bash
+pip install -e .
+# or directly from GitHub (no local clone needed):
+pip install git+https://github.com/AdrianoDalPastro/GoalLanguageAgents.git
 ```
 
 Requirements: Python 3.11 or higher.
@@ -209,6 +223,8 @@ obj = session.decode(msg)
 
 `ADPSession` achieves up to 56% token reduction on multi-turn workloads.
 Full reference: [docs/dynamic-lut.md](docs/dynamic-lut.md).
+
+> **Note:** dynamic LUT aliases use the reserved `_N` pattern (underscore + digits). Payload keys or values matching `_\d+` (e.g. `{"_0": "literal"}`) will raise `ADPLUTSyncError` on decode.
 
 ## Project structure
 

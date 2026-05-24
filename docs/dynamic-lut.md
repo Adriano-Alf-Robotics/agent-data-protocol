@@ -90,6 +90,8 @@ disjoint from the short letters of the static LUT. Deterministic side-local LRU
 eviction: sender and receiver evict identically because they observe the same
 insertions and the same accesses.
 
+> **⚠️ Reserved namespace:** dynamic LUT aliases use the `_N` pattern (underscore + digits). User payloads with keys or values matching `_\d+` (e.g. `{"_0": "literal"}`) will raise `ADPLUTSyncError` on decode. Avoid this pattern in your payloads.
+
 ### Differential encoding
 
 When two consecutive messages in the same direction share most of their fields
@@ -180,6 +182,10 @@ session = adp.ADPSession(
     tpd_promote_max_per_run=10,    # cap entry promosse per giro
 )
 
+# ⚠️ TPD overhead on short sessions: default tpd_promote_every=10 assumes
+# conversations of 50+ messages. On shorter workloads, header overhead from
+# promoted entries may exceed savings. Set tpd_promote_every=0 to disable.
+
 # Pre-warm da corpus passato (accelera bootstrap)
 session.warmup(past_messages_log)
 
@@ -189,6 +195,8 @@ try:
 except (adp.ADPLUTSyncError, adp.ADPDiffSyncError):
     msg = session.encode_full(payload)  # forza re-send completo
 ```
+
+> **⚠️ TPD overhead on short sessions:** default `tpd_promote_every=10` assumes conversations of 50+ messages. On shorter workloads, header overhead from promoted entries may exceed savings. Set `tpd_promote_every=0` to disable for short sessions.
 
 Full API: `encode`, `encode_full`, `encode_reset`, `decode`, `reset`,
 `reset_caps`, `save`, `stats`, `warmup`, `_run_tpd_promotion`,
