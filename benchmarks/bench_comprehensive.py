@@ -177,8 +177,107 @@ def main() -> None:
     out_path.write_text(json.dumps(all_results, indent=2))
     print(f"\nRisultati salvati in {out_path}")
 
+    md_path = Path(__file__).parent / "comprehensive_report.md"
+    generate_markdown_report(all_results, md_path)
+
     # Print summary table (solo @ length 100 per brevità)
     print_summary(all_results, length="100")
+
+
+def generate_markdown_report(all_results: dict, output_path: Path) -> None:
+    """Genera report Markdown con tutte le viste."""
+    lines = [
+        "# Comprehensive Benchmark Report",
+        "",
+        "Auto-generato da `benchmarks/bench_comprehensive.py`. Tokenizer `cl100k_base`.",
+        "",
+    ]
+    encoders = ["json_min", "toon", "adp_base", "adp_static",
+                "adp_dyn_cold", "adp_full_stack"]
+
+    # Sezione 1: token totali per (workload, length, encoder)
+    lines.append("## Token totali")
+    lines.append("")
+    for length in LENGTHS:
+        lines.append(f"### @ {length} msg")
+        lines.append("")
+        header = "| Workload | " + " | ".join(encoders) + " |"
+        sep = "|---|" + "|".join(["---:"] * len(encoders)) + "|"
+        lines.append(header)
+        lines.append(sep)
+        for workload, by_length in all_results.items():
+            run = by_length.get(str(length), {})
+            if "error" in run:
+                lines.append(f"| {workload} | ERROR |" + " |" * (len(encoders) - 1))
+                continue
+            row = f"| {workload} |"
+            for e in encoders:
+                tokens = run.get(e, {}).get("total_tokens", 0)
+                row += f" {tokens:,} |"
+            lines.append(row)
+        lines.append("")
+
+    # Sezione 2: Δ% vs TOON e vs JSON-min per full stack @ 100
+    lines.append("## ADP full_stack vs TOON e JSON @ 100 msg")
+    lines.append("")
+    lines.append("| Workload | JSON | TOON | ADP full | Δ vs JSON | Δ vs TOON |")
+    lines.append("|---|---:|---:|---:|---:|---:|")
+    for workload, by_length in all_results.items():
+        run = by_length.get("100", {})
+        if "error" in run:
+            continue
+        j = run.get("json_min", {}).get("total_tokens", 0)
+        t = run.get("toon", {}).get("total_tokens", 0)
+        a = run.get("adp_full_stack", {}).get("total_tokens", 0)
+        d_json = (j - a) / j * 100 if j else 0
+        d_toon = (t - a) / t * 100 if t else 0
+        lines.append(f"| {workload} | {j:,} | {t:,} | {a:,} | "
+                     f"{d_json:+.1f}% | {d_toon:+.1f}% |")
+    lines.append("")
+
+    # Sezione 3: Pricing $ stima per conversazione 1k msg @ Claude Sonnet 4.6
+    lines.append("## Costo $ stima per 1 conversazione di 1000 msg")
+    lines.append("")
+    lines.append("Estrapolato linearmente dal run @ 100 msg, Claude Sonnet 4.6 ($3/Mtok).")
+    lines.append("")
+    lines.append("| Workload | JSON 1k | TOON 1k | ADP full 1k | Risparmio vs TOON |")
+    lines.append("|---|---:|---:|---:|---:|")
+    for workload, by_length in all_results.items():
+        run = by_length.get("100", {})
+        if "error" in run:
+            continue
+        j_1k = run.get("json_min", {}).get("total_tokens", 0) * 10
+        t_1k = run.get("toon", {}).get("total_tokens", 0) * 10
+        a_1k = run.get("adp_full_stack", {}).get("total_tokens", 0) * 10
+        cost_j = cost_estimate(j_1k, "claude-sonnet-4-6")
+        cost_t = cost_estimate(t_1k, "claude-sonnet-4-6")
+        cost_a = cost_estimate(a_1k, "claude-sonnet-4-6")
+        saving = cost_t - cost_a
+        lines.append(f"| {workload} | {format_cost(cost_j)} | "
+                     f"{format_cost(cost_t)} | {format_cost(cost_a)} | "
+                     f"{format_cost(saving)} |")
+    lines.append("")
+
+    # Sezione 4: Latency
+    lines.append("## Latency encode median @ 100 msg (ms)")
+    lines.append("")
+    lines.append("| Workload | json | toon | adp_full | "
+                 "decode adp_full median |")
+    lines.append("|---|---:|---:|---:|---:|")
+    for workload, by_length in all_results.items():
+        run = by_length.get("100", {})
+        if "error" in run:
+            continue
+        j = run.get("json_min", {}).get("encode_median_ms", 0)
+        t = run.get("toon", {}).get("encode_median_ms", 0)
+        a_enc = run.get("adp_full_stack", {}).get("encode_median_ms", 0)
+        a_dec = run.get("adp_full_stack", {}).get("decode_median_ms", 0)
+        lines.append(f"| {workload} | {j:.3f} | {t:.3f} | "
+                     f"{a_enc:.3f} | {a_dec:.3f} |")
+    lines.append("")
+
+    output_path.write_text("\n".join(lines))
+    print(f"Markdown report salvato in {output_path}")
 
 
 def print_summary(all_results: dict, length: str = "100") -> None:
