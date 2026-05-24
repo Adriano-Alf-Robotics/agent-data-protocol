@@ -3,86 +3,82 @@
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Python ≥3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
 
-**Formato testuale lossless e aggressivamente token-efficient per la comunicazione tra agenti AI.**
+> 🇮🇹 Per la versione italiana: [README.it.md](README.it.md)
 
-ADP (versione 0.2) è una libreria Python che definisce e implementa un
-piccolo linguaggio di serializzazione progettato specificamente per lo
-scambio di messaggi tra modelli linguistici. Non è pensato per essere
-letto da un essere umano a prima vista: a quello pensano i convertitori
-in Markdown leggibile e in JSON canonico.
+**A lossless, aggressively token-efficient text format for communication between AI agents.**
 
-L'obiettivo è ridurre il numero di token che gli agenti spendono per
-parlarsi preservando tutta l'informazione strutturale di un payload JSON
-tipico — mappe annidate, liste, tabelle con cells annidate, testi
-multilinea, primitive tipizzate, **bytes** — senza mai introdurre perdita
-di dati.
+ADP (version 0.2) is a Python library that defines and implements a small
+serialization language designed specifically for message exchange between
+language models. It is not intended to be read by a human at a glance: that
+is the job of the converters to readable Markdown and canonical JSON.
 
-**Quanto risparmia (vs JSON-min, tokenizer cl100k_base):**
+The goal is to reduce the number of tokens that agents spend communicating
+with each other, while preserving all structural information from a typical
+JSON payload — nested maps, lists, tables with nested cells, multiline text,
+typed primitives, **bytes** — without ever introducing data loss.
 
-| Payload tipico | JSON-min (tok) | ADP (tok) | Δ |
+**How much it saves (vs JSON-min, cl100k_base tokenizer):**
+
+| Typical payload | JSON-min (tok) | ADP (tok) | Δ |
 |---|---:|---:|---:|
-| Tabella omogenea (it) | 333 | 164 | **+50,8%** |
-| Lista contatti con URL/email | 145 | 94 | **+35,2%** |
-| Tabelle con cells annidate | 100 | 75 | **+25,0%** |
-| Conversazione 20 msg agent-to-agent (full stack) | 2079 | **908** | **+56,3%** |
+| Homogeneous table (it) | 333 | 164 | **+50.8%** |
+| Contact list with URL/email | 145 | 94 | **+35.2%** |
+| Tables with nested cells | 100 | 75 | **+25.0%** |
+| 20-message agent-to-agent conversation (full stack) | 2079 | **908** | **+56.3%** |
 
-L'ultima riga è ottenuta con `ADPSession` (dynamic LUT HPACK-style + differential encoding inter-message + capability negotiation + TPD auto-promotion + tokenizer-aware cost). Sullo stesso payload, **TOON** richiede 2249 token: ADP è **2,5× più economico di TOON** in scenari multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding) per dettagli.
+The last row is achieved with `ADPSession` (dynamic LUT HPACK-style + differential inter-message encoding + capability negotiation + TPD auto-promotion + tokenizer-aware cost). On the same payload, **TOON** requires 2249 tokens: ADP is **2.5× cheaper than TOON** in realistic multi-turn scenarios. See the [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding) section for details.
 
-## Indice
+## Table of Contents
 
-1. [Perché ADP](#perché-adp)
-2. [Installazione](#installazione)
+1. [Why ADP](#why-adp)
+2. [Installation](#installation)
 3. [Quickstart](#quickstart)
-4. [Sintassi in pillole](#sintassi-in-pillole)
-5. [Convertitori](#convertitori)
-6. [Integrazione con agenti AI](#integrazione-con-agenti-ai)
+4. [Syntax cheat sheet](#syntax-cheat-sheet)
+5. [Converters](#converters)
+6. [AI agent integration](#ai-agent-integration)
 7. [Dynamic LUT (HPACK-style) + differential encoding](#dynamic-lut-hpack-style--differential-encoding)
-8. [Riduzione token misurata](#riduzione-token-misurata)
-9. [Esempi a confronto](#esempi-a-confronto)
-10. [Immagini](#immagini)
-11. [Usare ADP in Claude Code](#usare-adp-in-claude-code)
-12. [Integrità — sign / verify](#integrità--sign--verify)
-13. [Struttura del progetto](#struttura-del-progetto)
-14. [Sviluppo e test](#sviluppo-e-test)
+8. [Measured token reduction](#measured-token-reduction)
+9. [Side-by-side examples](#side-by-side-examples)
+10. [Images](#images)
+11. [Using ADP in Claude Code](#using-adp-in-claude-code)
+12. [Integrity — sign / verify](#integrity--sign--verify)
+13. [Project structure](#project-structure)
+14. [Development and testing](#development-and-testing)
 15. [Roadmap](#roadmap)
-16. [Licenza](#licenza)
+16. [License](#license)
 
 ---
 
-## Perché ADP
+## Why ADP
 
-Quando due o più agenti AI si scambiano dati, la rappresentazione più
-naturale è JSON. JSON funziona benissimo per le macchine, ma è verboso
-per i tokenizer LLM: ogni virgoletta intorno a una chiave costa, ogni
-`true` costa più di un singolo `1`, ogni tabella di righe omogenee paga
-il prezzo di ripetere le chiavi a ogni riga, e i bytes binari non sono
-nativamente rappresentabili.
+When two or more AI agents exchange data, the most natural representation is
+JSON. JSON works very well for machines, but it is verbose for LLM tokenizers:
+every quotation mark around a key costs tokens, every `true` costs more than
+a single `1`, every table of homogeneous rows pays the price of repeating keys
+on every row, and binary bytes cannot be represented natively.
 
-ADP prende le decisioni di design che JSON non poteva permettersi:
+ADP makes the design decisions that JSON could not afford:
 
-- niente virgolette obbligatorie su chiavi o stringhe semplici;
-- `1`/`0` al posto di `true`/`false`, `~` al posto di `null`;
-- newline letterali dentro le stringhe (niente sequenze `\n`);
-- una notazione tabella dedicata per le liste di dizionari omogenei,
-  che ammette **cells annidate** (liste e mappe);
-- bare strings ampliate per assorbire URL, email e percorsi senza
-  virgolette;
-- `bytes` nativi tramite prefisso `b!` + base64 standard;
-- top-level senza wrappers (`name=value;name=value` invece di sintassi
-  ridondante).
+- no mandatory quotes around keys or simple strings;
+- `1`/`0` in place of `true`/`false`, `~` in place of `null`;
+- literal newlines inside strings (no `\n` escape sequences);
+- a dedicated table notation for lists of homogeneous dictionaries,
+  which supports **nested cells** (lists and maps);
+- extended bare strings to absorb URLs, emails, and paths without quotes;
+- native `bytes` via the `b!` prefix + standard base64;
+- top-level without wrappers (`name=value;name=value` instead of redundant syntax).
 
-Il prezzo da pagare è la perdita di leggibilità diretta da parte di un
-umano, ma il convertitore Markdown della libreria ricostruisce sempre
-una versione leggibile, mentre il convertitore JSON ripristina una
-struttura universalmente machine-readable.
+The trade-off is the loss of direct human readability, but the library's
+Markdown converter always reconstructs a readable version, while the JSON
+converter restores a universally machine-readable structure.
 
-## Installazione
+## Installation
 
 ```bash
 uv sync --all-extras
 ```
 
-Requisiti: Python 3.11 o superiore.
+Requirements: Python 3.11 or higher.
 
 ## Quickstart
 
@@ -113,7 +109,7 @@ print(adp.to_json(s))      # JSON canonico per macchine non-AI
 print(adp.to_markdown(s))  # Markdown leggibile per umani
 ```
 
-Da riga di comando:
+From the command line:
 
 ```bash
 echo '{"user":{"id":42,"name":"Adriano"}}' | uv run adp encode
@@ -126,62 +122,61 @@ uv run adp bench < payload.json    # confronto token ADP vs JSON
 uv run adp prompt --few-shot       # stampa il prompt di sistema per LLM
 ```
 
-## Sintassi in pillole
+## Syntax cheat sheet
 
-| Elemento | Sintassi | Esempio |
+| Element | Syntax | Example |
 |---|---|---|
 | Top-level | `name=value;name=value` | `id=42;ok=1` |
-| Intero | nudo | `42`, `-7` |
-| Intero 0 o 1 (disambiguazione) | suffisso `i` | `0i`, `1i` |
-| Float | con punto decimale | `3.14`, `-0.5` |
-| Booleano | `1` / `0` | `1` = true |
+| Integer | bare | `42`, `-7` |
+| Integer 0 or 1 (disambiguation) | suffix `i` | `0i`, `1i` |
+| Float | with decimal point | `3.14`, `-0.5` |
+| Boolean | `1` / `0` | `1` = true |
 | Null | `~` | `~` |
 | Bytes | `b!<base64>` | `b!aGVsbG8=` |
-| Stringa "bare" | senza virgolette | `Adriano`, `ops@acme.example`, `https://x.y/api` |
-| Stringa quotata | tra `"..."` | `"con spazio"` |
-| Escape dentro stringa | solo `\"` e `\\` | `"dice \"ciao\""` |
-| Lista | `[a,b,c]` | `[admin,root]` |
-| Mappa | `{k=v;k=v}` | `{id=1;qty=2}` |
-| Tabella | `#h1,h2\|r1c1,r1c2\|...` | `#id,unit\|1i,kg\|2,m` |
-| Tabella con cells nested | `#h\|[a,b]\|{k=v}` | `#id,tags\|1i,[a,b]\|2,[c]` |
+| Bare string | without quotes | `Adriano`, `ops@acme.example`, `https://x.y/api` |
+| Quoted string | within `"..."` | `"with space"` |
+| Escape inside string | only `\"` and `\\` | `"says \"hello\""` |
+| List | `[a,b,c]` | `[admin,root]` |
+| Map | `{k=v;k=v}` | `{id=1;qty=2}` |
+| Table | `#h1,h2\|r1c1,r1c2\|...` | `#id,unit\|1i,kg\|2,m` |
+| Table with nested cells | `#h\|[a,b]\|{k=v}` | `#id,tags\|1i,[a,b]\|2,[c]` |
 
-Una stringa va in virgolette solo se contiene spazi, ritorni a capo,
-delimitatori sintattici (`,;=[]{}|"#&~`) o se sembra un numero. Tutto il
-resto può essere "bare" — incluso email (`@`), URL (`:`, `/`), percorsi
-(`/`, `.`), espressioni con parentesi (`(2+3)`).
+A string needs quotes only if it contains spaces, newlines, syntactic
+delimiters (`,;=[]{}|"#&~`), or if it looks like a number. Everything else
+can be "bare" — including emails (`@`), URLs (`:`, `/`), paths (`/`, `.`),
+expressions with parentheses (`(2+3)`).
 
-Grammatica completa: vedi
+Full grammar: see
 [`docs/superpowers/specs/2026-05-22-adp-design.md`](docs/superpowers/specs/2026-05-22-adp-design.md).
 
-## Convertitori
+## Converters
 
-| Direzione | Funzione | Round-trip | Uso tipico |
+| Direction | Function | Round-trip | Typical use |
 |---|---|:---:|---|
-| Python → ADP | `adp.encode(obj)` | ✓ | serializzazione |
-| ADP → Python | `adp.decode(s)` | ✓ | deserializzazione |
-| ADP → JSON | `adp.to_json(s)` | ✓ | macchine senza AI |
-| JSON → ADP | `adp.from_json(s)` | ✓ | importazione da JSON |
-| ADP → Markdown | `adp.to_markdown(s)` | ✗ (one-way) | lettura umana |
-| ADP → HTML | `adp.to_html(s)` | ✗ (one-way) | dashboard, browser |
+| Python → ADP | `adp.encode(obj)` | ✓ | serialization |
+| ADP → Python | `adp.decode(s)` | ✓ | deserialization |
+| ADP → JSON | `adp.to_json(s)` | ✓ | non-AI machines |
+| JSON → ADP | `adp.from_json(s)` | ✓ | import from JSON |
+| ADP → Markdown | `adp.to_markdown(s)` | ✗ (one-way) | human reading |
+| ADP → HTML | `adp.to_html(s)` | ✗ (one-way) | dashboards, browser |
 
-### HTML standalone con auto dark mode
+### Standalone HTML with automatic dark mode
 
 ```python
 html_page = adp.to_html(adp_msg, title="Report Q1")
 Path("report.html").write_text(html_page)
 ```
 
-Produce un documento HTML5 completo con CSS embedded, tabelle bordate,
-auto-switch light/dark via `prefers-color-scheme`, tooltip sui bytes,
-code-block per testi multilinea. Da CLI: `adp to-html < msg.adp > out.html`.
+Produces a complete HTML5 document with embedded CSS, bordered tables,
+automatic light/dark switching via `prefers-color-scheme`, tooltips on bytes,
+and code blocks for multiline text. From the CLI: `adp to-html < msg.adp > out.html`.
 
-### Pagina HTML dinamica (live viewer append-only)
+### Dynamic HTML page (live append-only viewer)
 
-Per scenari in cui un agente emette record ADP a flusso continuo (log,
-monitoring, output multi-step), il sottocomando `adp serve` avvia un
-piccolo server HTTP che apre una **pagina unica** auto-aggiornata via
-Server-Sent Events: ogni nuovo record viene renderizzato e accodato in
-fondo senza ricaricare la pagina.
+For scenarios where an agent emits ADP records as a continuous stream (logs,
+monitoring, multi-step output), the `adp serve` subcommand starts a small HTTP
+server that opens a **single page** auto-updated via Server-Sent Events: each
+new record is rendered and appended at the bottom without reloading the page.
 
 ```bash
 my-agent-emitting-adp | uv run adp serve --port 8000
@@ -190,22 +185,22 @@ my-agent-emitting-adp | uv run adp serve --port 8000
 
 ![Live viewer SSE](docs/img/live-viewer.png)
 
-Caratteristiche:
+Features:
 
-- zero dipendenze (usa solo stdlib `http.server`)
-- pagina cronologica con timestamp per ogni record
-- backfill automatico dei record già ricevuti se apri il browser dopo
-- indicatore live/disconnected in basso a destra
-- contatore record nell'header
-- mantiene auto-scroll in fondo all'arrivo di nuovi dati
+- zero dependencies (uses only stdlib `http.server`)
+- chronological page with a timestamp for each record
+- automatic backfill of records already received if the browser is opened late
+- live/disconnected indicator in the bottom right corner
+- record counter in the header
+- maintains auto-scroll to the bottom as new data arrives
 
-Casi d'uso tipici: monitoraggio agente long-running, debug di pipeline
-multi-step, dashboard di sviluppo, demo a clienti.
+Typical use cases: long-running agent monitoring, multi-step pipeline debugging,
+development dashboards, client demos.
 
-Bytes nel passaggio JSON sono codificati come
-`{"_adp_bytes": "<base64>"}` per preservarli.
+Bytes in the JSON pass-through are encoded as
+`{"_adp_bytes": "<base64>"}` to preserve them.
 
-## Integrazione con agenti AI
+## AI agent integration
 
 ### 1. System prompt
 
@@ -223,7 +218,7 @@ resp = client.messages.create(
 data = adp.decode(resp.content[0].text)
 ```
 
-Il modulo `adp.prompt` espone `system_prompt()`, `few_shot_examples()`,
+The `adp.prompt` module exposes `system_prompt()`, `few_shot_examples()`,
 `few_shot_block()`.
 
 ### 2. Validator-with-retry
@@ -241,7 +236,7 @@ def chat_in_adp(prompt: str, max_retries: int = 2) -> dict:
     raise RuntimeError("ADP non valido dopo retry")
 ```
 
-### 3. Pipeline multi-agente
+### 3. Multi-agent pipeline
 
 ```python
 def pipeline(input_data: dict) -> dict:
@@ -252,19 +247,19 @@ def pipeline(input_data: dict) -> dict:
     return adp.decode(msg)
 ```
 
-### 4. Persistenza session
+### 4. Session persistence
 
 ```python
 Path("session.adp").write_text(msg, encoding="utf-8")
 restored = adp.decode(Path("session.adp").read_text(encoding="utf-8"))
 ```
 
-## LUT — Look-Up Table condivisa (opzionale, ulteriore risparmio)
+## LUT — Shared Look-Up Table (optional, additional savings)
 
-Se mittente e destinatario condividono una **LUT** (tabella di sigle) le
-chiavi ricorrenti vengono compresse a 1-2 caratteri durante l'encoding e
-ripristinate durante il decoding. Il messaggio finale non è più
-testualmente leggibile ma resta lossless e attraversa lo stesso parser.
+If sender and receiver share a **LUT** (abbreviation table), recurring keys
+are compressed to 1–2 characters during encoding and restored during decoding.
+The final message is no longer textually readable but remains lossless and
+passes through the same parser.
 
 ```python
 import adp
@@ -278,34 +273,31 @@ s = adp.encode(obj, key_lut=LUT)
 assert adp.decode(s, key_lut=LUT) == obj
 ```
 
-La libreria espone `adp.DEFAULT_AGENT_LUT`, una LUT pre-confezionata
-per i nomi tipici dei messaggi inter-agente (`msg_id`, `from_agent`,
-`intent`, `payload`, `id`, `name`, `status`, `value`, ...). Su un
-messaggio di task tra agenti il risparmio passa da +5,7% (ADP solo) a
-**+13,6%** (ADP+LUT) sui token cl100k_base.
+The library exposes `adp.DEFAULT_AGENT_LUT`, a pre-packaged LUT for typical
+inter-agent message field names (`msg_id`, `from_agent`, `intent`, `payload`,
+`id`, `name`, `status`, `value`, ...). On an inter-agent task message, savings
+grow from +5.7% (ADP alone) to **+13.6%** (ADP+LUT) on cl100k_base tokens.
 
-Vincoli LUT: chiavi e sigle devono essere identificatori validi
-`[A-Za-z_][A-Za-z0-9_-]*`; le sigle non possono coincidere con i
-letterali riservati (`~`, `0`, `1`, `0i`, `1i`). `adp.validate_lut(lut)`
-verifica entrambi i requisiti.
+LUT constraints: keys and abbreviations must be valid identifiers
+`[A-Za-z_][A-Za-z0-9_-]*`; abbreviations cannot coincide with reserved literals
+(`~`, `0`, `1`, `0i`, `1i`). `adp.validate_lut(lut)` checks both requirements.
 
 ## Dynamic LUT (HPACK-style) + differential encoding
 
-La LUT statica richiede che mittente e destinatario condividano in anticipo
-lo stesso dizionario di sigle. Per scenari dove gli agenti non possono
-coordinarsi a priori, oppure dove il vocabolario è specifico del dominio di
-conversazione, ADP offre `ADPSession`: una **LUT dinamica adattiva
-HPACK-style** (modellata sull'header compression di HTTP/2, RFC 7541) che
-**cresce in modo sincronizzato durante la sessione** tramite update in-band,
-e un **differential encoding inter-message** che invia solo il delta
-rispetto al messaggio precedente quando conviene.
+The static LUT requires that sender and receiver share the same abbreviation
+dictionary in advance. For scenarios where agents cannot coordinate beforehand,
+or where the vocabulary is specific to the conversation domain, ADP provides
+`ADPSession`: an **adaptive HPACK-style dynamic LUT** (modeled on HTTP/2 header
+compression, RFC 7541) that **grows synchronously during the session** via
+in-band updates, and a **differential inter-message encoding** that sends only
+the delta relative to the previous message when it is advantageous to do so.
 
-Le due tecniche sono ortogonali e combinabili: sullo stesso workload da 20
-messaggi agent-to-agent, la combinazione `static LUT + dynamic LUT + diff
-encoding` (full stack) riduce i token del **56,9% rispetto a JSON-min** e
-del **60,1% rispetto a TOON** (best competitor).
+The two techniques are orthogonal and composable: on the same 20-message
+agent-to-agent workload, the combination `static LUT + dynamic LUT + diff
+encoding` (full stack) reduces tokens by **56.9% relative to JSON-min** and
+**60.1% relative to TOON** (best competitor).
 
-### Uso base
+### Basic usage
 
 ```python
 import adp
@@ -325,31 +317,31 @@ obj = session.decode(msg)
 # Lo stato LUT di entrambi è ora sincronizzato dopo la decodifica.
 ```
 
-Lo state cresce ad ogni messaggio scambiato. Persistenza locale automatica
-in `~/.adp/lut_state.json` (override via parametro `path=` o env
-`ADP_LUT_PATH`). LRU bounded a 256 entry di default. Tutto stdlib, zero
-dipendenze nuove.
+The state grows with every exchanged message. Automatic local persistence in
+`~/.adp/lut_state.json` (override via the `path=` parameter or the
+`ADP_LUT_PATH` env variable). LRU bounded to 256 entries by default. Pure
+stdlib, zero new dependencies.
 
-### Sintassi in-band
+### In-band syntax
 
-ADPSession emette tre prefissi top-level riservati all'inizio del messaggio:
+ADPSession emits three reserved top-level prefixes at the start of each message:
 
-| Prefisso | Significato |
+| Prefix | Meaning |
 |---|---|
-| `_lut_add={alias=fullname;...}` | aggiunge nuove entry alla LUT dinamica |
-| `_lut_reset=1` | pulisce completamente la LUT dinamica del receiver |
-| `_base=ID;_diff={set=...;del=[...]}` | applica un diff al baseline ID |
+| `_lut_add={alias=fullname;...}` | adds new entries to the dynamic LUT |
+| `_lut_reset=1` | completely clears the receiver's dynamic LUT |
+| `_base=ID;_diff={set=...;del=[...]}` | applies a diff to the baseline ID |
 
-Gli alias dinamici usano il namespace riservato `_N` (underscore + cifre),
-disgiunto dalle short letters della LUT statica. Eviction LRU side-local
-deterministica: sender e receiver evictono identicamente perché osservano
-le stesse inserzioni e gli stessi USI.
+Dynamic aliases use the reserved namespace `_N` (underscore + digits),
+disjoint from the short letters of the static LUT. Deterministic side-local LRU
+eviction: sender and receiver evict identically because they observe the same
+insertions and the same accesses.
 
 ### Differential encoding
 
-Quando due messaggi consecutivi nella stessa direzione condividono la
-maggior parte dei campi (pattern tipico: status report, incremental result,
-state update), `ADPSession` calcola il diff e invia solo le modifiche:
+When two consecutive messages in the same direction share most of their fields
+(a typical pattern: status reports, incremental results, state updates),
+`ADPSession` computes the diff and sends only the changes:
 
 ```python
 sender = adp.ADPSession()
@@ -365,20 +357,19 @@ msg2 = sender.encode({"task_id": "t2", "user": {"id": 42, "role": "administrator
 receiver.decode(msg2)
 ```
 
-L'encoder valuta automaticamente quando emettere diff: solo se il diff
-codificato è inferiore al `diff_threshold * len(full_msg)` (default 0.7).
-Per cambi massivi, fallback automatico a full encoding. Recovery dopo
-desincronizzazione tramite `session.encode_full(obj)`.
+The encoder automatically evaluates when to emit a diff: only if the encoded
+diff is smaller than `diff_threshold * len(full_msg)` (default 0.7). For
+massive changes, it automatically falls back to full encoding. Recovery after
+desynchronization via `session.encode_full(obj)`.
 
-### Sincronizzazione e recovery
+### Synchronization and recovery
 
-Sender e receiver mantengono stati indipendenti che si allineano per
-costruzione: ogni messaggio porta gli update LUT necessari per la sua
-decodifica e (per il diff) un base_id che identifica univocamente il
-payload precedente. Se il receiver non riconosce il base_id (perché ha
-perso lo state, ha appena riavviato, o ha ricevuto messaggi fuori
-ordine), solleva `ADPDiffSyncError`. L'app intercetta l'errore e chiede
-al sender un full re-send via `encode_full()`.
+Sender and receiver maintain independent states that align by construction:
+every message carries the LUT updates needed for its own decoding and (for
+diffs) a base_id that uniquely identifies the previous payload. If the receiver
+does not recognize the base_id (because it lost its state, just restarted, or
+received messages out of order), it raises `ADPDiffSyncError`. The application
+catches the error and requests a full re-send from the sender via `encode_full()`.
 
 ```python
 try:
@@ -391,39 +382,38 @@ except adp.ADPLUTSyncError:
     request_full_resend()
 ```
 
-### Confronto static vs dynamic vs full stack
+### Static vs dynamic vs full stack comparison
 
-Benchmark su 20 messaggi agent-to-agent (planner ↔ executor) con
-tokenizer `cl100k_base`. Pattern realistico request/reply, payload
-strutturato (annidamento dict + lista di eventi):
+Benchmark on 20 agent-to-agent messages (planner ↔ executor) with the
+`cl100k_base` tokenizer. Realistic request/reply pattern, structured payload
+(nested dict + list of events):
 
-| Formato | Token totali | Δ vs JSON | Δ vs TOON |
+| Format | Total tokens | Δ vs JSON | Δ vs TOON |
 |---|---:|---:|---:|
-| JSON-min | 2079 | baseline | +7,6% |
-| **TOON** | **2249** | **−8,2%** | baseline |
-| ADP base (no LUT) | 1903 | +8,5% | +15,4% |
-| ADP + static LUT (`DEFAULT_AGENT_LUT`) | 1833 | +11,8% | +18,5% |
-| ADP + dynamic LUT (cold) | 2071 | +0,4% | +7,9% |
-| ADP + dynamic + static LUT | 1890 | +9,1% | +16,0% |
-| ADP + dynamic LUT + diff encoding | 977 | +53,0% | +56,6% |
-| ADP + full stack (static + dynamic + diff) | 931 | +55,2% | +58,6% |
-| **ADP full stack + tokenizer-aware cost** | **908** | **+56,3%** | **+59,6%** |
+| JSON-min | 2079 | baseline | +7.6% |
+| **TOON** | **2249** | **−8.2%** | baseline |
+| ADP base (no LUT) | 1903 | +8.5% | +15.4% |
+| ADP + static LUT (`DEFAULT_AGENT_LUT`) | 1833 | +11.8% | +18.5% |
+| ADP + dynamic LUT (cold) | 2071 | +0.4% | +7.9% |
+| ADP + dynamic + static LUT | 1890 | +9.1% | +16.0% |
+| ADP + dynamic LUT + diff encoding | 977 | +53.0% | +56.6% |
+| ADP + full stack (static + dynamic + diff) | 931 | +55.2% | +58.6% |
+| **ADP full stack + tokenizer-aware cost** | **908** | **+56.3%** | **+59.6%** |
 
-Con warm-start (pre-popolazione della LUT da log di sessione passata via
-`session.warmup(messages_log)`), la seconda metà di una conversazione
-risparmia ulteriormente ~6% rispetto al cold-start.
+With warm-start (pre-populating the LUT from a past session log via
+`session.warmup(messages_log)`), the second half of a conversation saves an
+additional ~6% compared to cold-start.
 
-### Benchmark comprehensive: 7 workload × 4 lunghezze
+### Comprehensive benchmark: 7 workloads × 4 lengths
 
-Oltre al benchmark singolo qui sopra, una suite più ampia copre sette
-workload diversi (status polling, tool use, narrative, ETL pipeline,
-broadcast, DB query, mixed) a quattro lunghezze di conversazione
-(10/50/100/500 messaggi), con stima costo $ per provider e latenza
-encode/decode.
+Beyond the single benchmark above, a broader suite covers seven different
+workloads (status polling, tool use, narrative, ETL pipeline, broadcast,
+DB query, mixed) at four conversation lengths (10/50/100/500 messages), with
+estimated cost in $ per provider and encode/decode latency.
 
-Sintesi @ 100 msg per workload — ADP full stack vs TOON (best competitor):
+Summary @ 100 messages per workload — ADP full stack vs TOON (best competitor):
 
-| Workload | Δ vs TOON | Risparmio $ per 1k msg (Sonnet 4.6) |
+| Workload | Δ vs TOON | Savings $ per 1k msg (Sonnet 4.6) |
 |---|---:|---:|
 | status_polling | **+61.1%** | $0.156 |
 | etl_pipeline | **+60.2%** | $2.61 |
@@ -433,43 +423,43 @@ Sintesi @ 100 msg per workload — ADP full stack vs TOON (best competitor):
 | multi_agent_broadcast | **+11.3%** | $0.015 |
 | long_narrative | +1.3% | $0.003 |
 
-Il guadagno è massimo sui workload con alta similarità inter-message
-(status polling) o forte struttura tabulare (ETL pipeline). Sul testo
-prosa libero (long_narrative) il margine è minimo perché diff/dyn LUT
-hanno poco materiale ricorrente da catturare.
+The gain is highest on workloads with high inter-message similarity (status
+polling) or strong tabular structure (ETL pipeline). On free-prose text
+(long_narrative) the margin is minimal because diff/dynamic LUT have little
+recurring material to capture.
 
-Report completo con tutte le lunghezze, latenza, pricing per provider:
+Full report with all lengths, latency, pricing per provider:
 [`benchmarks/comprehensive_report.md`](benchmarks/comprehensive_report.md).
-Generabile con:
+Regenerate with:
 
 ```bash
 uv run --with toon-py --with tiktoken python -m benchmarks.bench_comprehensive
 ```
 
-Il guadagno principale arriva dal diff encoding: su pattern request/reply
-con payload simili tra messaggi successivi, il delta è una frazione minima
-del payload completo. La dynamic LUT cold-start da sola non è
-particolarmente competitiva perché la LUT statica copre già la maggior
-parte dei pattern frequenti — il vero valore aggiunto è la combinazione
-con il diff e la specializzazione dinamica sul vocabolario di sessione.
+The main gain comes from diff encoding: on request/reply patterns with similar
+payloads between consecutive messages, the delta is a tiny fraction of the full
+payload. The dynamic LUT cold-start alone is not particularly competitive
+because the static LUT already covers most frequent patterns — the real added
+value is the combination with diff and dynamic specialization on the session
+vocabulary.
 
-Per rigenerare il benchmark:
+To regenerate the benchmark:
 
 ```bash
 uv run --with toon-py --with tiktoken python -m benchmarks.bench_dynamic_lut
 ```
 
-### Quando usare cosa
+### When to use what
 
-| Scenario | Configurazione consigliata |
+| Scenario | Recommended configuration |
 |---|---|
-| Singolo messaggio, agenti non coordinati | ADP base |
-| Agenti che condividono codebase (pre-share LUT) | ADP + static LUT (`DEFAULT_AGENT_LUT`) |
-| Sessione lunga, vocabolario dominio-specifico | ADP + dynamic LUT |
-| Pattern request/reply, payload simili tra msg | ADP + diff encoding |
-| **Workload misto, max risparmio** | **ADPSession full stack** |
+| Single message, uncoordinated agents | ADP base |
+| Agents sharing a codebase (pre-shared LUT) | ADP + static LUT (`DEFAULT_AGENT_LUT`) |
+| Long session, domain-specific vocabulary | ADP + dynamic LUT |
+| Request/reply pattern, similar payloads between messages | ADP + diff encoding |
+| **Mixed workload, maximum savings** | **ADPSession full stack** |
 
-### Parametri principali
+### Main parameters
 
 ```python
 session = adp.ADPSession(
@@ -502,102 +492,100 @@ except (adp.ADPLUTSyncError, adp.ADPDiffSyncError):
     msg = session.encode_full(payload)  # forza re-send completo
 ```
 
-API completa: `encode`, `encode_full`, `encode_reset`, `decode`, `reset`,
+Full API: `encode`, `encode_full`, `encode_reset`, `decode`, `reset`,
 `reset_caps`, `save`, `stats`, `warmup`, `_run_tpd_promotion`,
-property `peer_caps`. Helper stateless: `apply_lut_updates`,
-`encode_with_dyn_lut`. Estimator standalone: `TokenizerCostEstimator`,
+property `peer_caps`. Stateless helpers: `apply_lut_updates`,
+`encode_with_dyn_lut`. Standalone estimator: `TokenizerCostEstimator`,
 `estimate_cost`.
 
-Vedi il modulo `src/adp/session.py` e la spec di design in
+See the `src/adp/session.py` module and the design spec at
 [`docs/superpowers/specs/2026-05-24-dynamic-lut-design.md`](docs/superpowers/specs/2026-05-24-dynamic-lut-design.md).
 
-Optional extra per cost-benefit preciso:
+Optional extra for precise cost-benefit analysis:
 ```bash
-pip install adp[tokenizer]   # aggiunge tiktoken
+pip install adp[tokenizer]   # adds tiktoken
 ```
 
-## Riduzione token misurata
+## Measured token reduction
 
-Tokenizer `cl100k_base` (Claude 3.x / GPT-4), confronto vs JSON-min:
+`cl100k_base` tokenizer (Claude 3.x / GPT-4), comparison vs JSON-min:
 
 | Payload | JSON-min (tok) | ADP (tok) | Δ cl100k | Δ o200k |
 |---|---:|---:|---:|---:|
-| short_string_en | 15 | 13 | **+13,3%** | +13,3% |
-| short_string_it | 18 | 16 | **+11,1%** | +11,8% |
-| long_text_en | 115 | 109 | +5,2% | +5,3% |
-| long_text_it | 176 | 170 | +3,4% | +3,7% |
-| special_chars_en | 92 | 89 | +3,3% | +3,4% |
-| special_chars_it | 134 | 131 | +2,2% | +2,4% |
-| **tabular_en** | **241** | **145** | **+39,8%** | +40,1% |
-| **tabular_it** | **333** | **164** | **+50,8%** | +46,4% |
-| database_en | 150 | 134 | +10,7% | +10,5% |
-| database_it | 180 | 157 | +12,8% | +12,8% |
-| agent_task_en | 88 | 83 | +5,7% | +6,8% |
-| agent_task_it | 118 | 113 | +4,2% | +5,0% |
-| **contacts_en** (URL/email) | **145** | **94** | **+35,2%** | +34,9% |
-| **nested_table_en** (cells annidate) | **100** | **75** | **+25,0%** | +30,3% |
+| short_string_en | 15 | 13 | **+13.3%** | +13.3% |
+| short_string_it | 18 | 16 | **+11.1%** | +11.8% |
+| long_text_en | 115 | 109 | +5.2% | +5.3% |
+| long_text_it | 176 | 170 | +3.4% | +3.7% |
+| special_chars_en | 92 | 89 | +3.3% | +3.4% |
+| special_chars_it | 134 | 131 | +2.2% | +2.4% |
+| **tabular_en** | **241** | **145** | **+39.8%** | +40.1% |
+| **tabular_it** | **333** | **164** | **+50.8%** | +46.4% |
+| database_en | 150 | 134 | +10.7% | +10.5% |
+| database_it | 180 | 157 | +12.8% | +12.8% |
+| agent_task_en | 88 | 83 | +5.7% | +6.8% |
+| agent_task_it | 118 | 113 | +4.2% | +5.0% |
+| **contacts_en** (URL/email) | **145** | **94** | **+35.2%** | +34.9% |
+| **nested_table_en** (nested cells) | **100** | **75** | **+25.0%** | +30.3% |
 | binary_en | (JSON N/A) | 279 | — | — |
 
-Con `DEFAULT_AGENT_LUT` su `agent_task_en` il risparmio sale da +5,7% a **+13,6%**.
+With `DEFAULT_AGENT_LUT` on `agent_task_en`, savings rise from +5.7% to **+13.6%**.
 
-Lettura: ADP vince in modo significativo dove la struttura è tabella
-omogenea o contiene molti URL/email (bare strings ampliate), e sui dati
-binari dove JSON non funziona affatto. Sul testo libero il risparmio è
-contenuto ma sempre positivo. Su nested-table-with-cells (caso tipico
-dei messaggi multi-agente con sotto-strutture) il guadagno è del 25-30%.
+Reading guide: ADP wins significantly where the structure is a homogeneous
+table or contains many URLs/emails (extended bare strings), and on binary data
+where JSON does not work at all. On free text the savings are modest but always
+positive. On nested-table-with-cells (the typical case for multi-agent messages
+with sub-structures), the gain is 25–30%.
 
-Il file completo è in
-[`benchmarks/results.md`](benchmarks/results.md). Per rigenerarlo:
+The full file is at
+[`benchmarks/results.md`](benchmarks/results.md). To regenerate it:
 
 ```bash
 uv run python -m benchmarks.compare_formats
 ```
 
-### Bytes nativi: vantaggio strutturale
+### Native bytes: structural advantage
 
-Sul payload `binary_en` (immagine 256 byte) i risultati sono:
+On the `binary_en` payload (256-byte image) the results are:
 
-| Formato | Bytes | Token cl100k | Lossless | Note |
+| Format | Bytes | Token cl100k | Lossless | Notes |
 |---|---:|---:|:---:|---|
-| **ADP** | **412** | **279** | ✓ | bytes nativi via `b!base64` |
-| JSON-min | — | — | — | TypeError: bytes non serializzabili |
-| JSON-pretty | — | — | — | TypeError: bytes non serializzabili |
-| TOML | — | — | — | TypeError: bytes non serializzabili |
-| YAML | 460 | 299 | ✓ | richiede tag !!binary |
-| MsgPack-b64 | 428 | 309 | ✓ | binario base64-encoded |
+| **ADP** | **412** | **279** | ✓ | native bytes via `b!base64` |
+| JSON-min | — | — | — | TypeError: bytes not serializable |
+| JSON-pretty | — | — | — | TypeError: bytes not serializable |
+| TOML | — | — | — | TypeError: bytes not serializable |
+| YAML | 460 | 299 | ✓ | requires !!binary tag |
+| MsgPack-b64 | 428 | 309 | ✓ | binary base64-encoded |
 | XML | 908 | 469 | — | one-way, str(bytes) |
 
-ADP è uno dei pochi formati testuali che gestisce bytes lossless senza
-adattatori custom, ed è il più economico per token.
+ADP is one of the few text formats that handles bytes losslessly without custom
+adapters, and it is the cheapest in terms of tokens.
 
-### Nota importante: si paga ciò che il modello EMETTE, non ciò che vede l'utente
+### Important note: you pay for what the model EMITS, not what the user sees
 
-I provider LLM (Anthropic, OpenAI, ...) addebitano gli **output token in
-base a ciò che il modello emette**, non a ciò che la UI mostra. La
-differenza non è banale:
+LLM providers (Anthropic, OpenAI, ...) charge **output tokens based on what the
+model emits**, not on what the UI displays. The difference is non-trivial:
 
-| Cosa emesso dal modello | Pagato | Visto dall'utente |
+| What the model emits | Billed | Seen by user |
 |---|:---:|:---:|
-| Testo finale della risposta | ✓ | ✓ |
-| `thinking` / `reasoning` block (Claude 4, o1, o3) | **✓** | ✗ nascosto |
-| Argomenti JSON dei tool call | **✓** | parziale |
-| Caratteri Markdown raw (`**`, `##`, `|`) | ✓ | ✗ (renderizzati) |
-| Token emessi prima di stop sequence | ✓ | ✗ |
+| Final response text | ✓ | ✓ |
+| `thinking` / `reasoning` block (Claude 4, o1, o3) | **✓** | ✗ hidden |
+| JSON arguments of tool calls | **✓** | partial |
+| Raw Markdown characters (`**`, `##`, `|`) | ✓ | ✗ (rendered) |
+| Tokens emitted before stop sequence | ✓ | ✗ |
 
-Questa asimmetria è una **buona notizia per ADP**: chiedere al modello
-di emettere ADP (denso, pochi token) e poi convertirlo lato client in
-Markdown o JSON pretty produce la stessa esperienza utente a un costo
-significativamente inferiore.
+This asymmetry is **good news for ADP**: asking the model to emit ADP (dense,
+few tokens) and then converting it client-side to Markdown or pretty JSON
+produces the same user experience at a significantly lower cost.
 
 ```
-Modello emette ADP  ──── paghi pochi token  (output_tokens API)
+Model emits ADP  ──── you pay few tokens  (output_tokens API)
         │
-        └── client converte con adp.to_markdown()  ── zero costo
+        └── client converts with adp.to_markdown()  ── zero cost
                                        │
-                                       └── utente vede output ricco
+                                       └── user sees rich output
 ```
 
-Verifica nel response API:
+Verify in the API response:
 
 ```python
 resp = client.messages.create(model="claude-opus-4-7", ...)
@@ -605,27 +593,27 @@ print("output_tokens:", resp.usage.output_tokens)
 # include thinking + tool_use + text — non solo ciò che renderizzi
 ```
 
-Su modelli con extended thinking, il reasoning interno può essere il
-50-90% degli output token. Se il reasoning è verboso (es. JSON
-intermedio) lo paghi tutto, anche se non viene mostrato.
+On models with extended thinking, the internal reasoning can account for 50–90%
+of output tokens. If the reasoning is verbose (e.g., intermediate JSON), you
+pay for all of it, even though it is not displayed.
 
-## Esempi a confronto
+## Side-by-side examples
 
-Stesso payload nested-table (4 utenti con ruoli e permessi):
+Same nested-table payload (4 users with roles and permissions):
 
-### ADP — 75 token, 159 byte
+### ADP — 75 tokens, 159 bytes
 
 ```
 users=#id,name,roles,perms|1i,alice,[admin,ops],{read=1;write=1}|2,bob,[dev],{read=1;write=0}|3,carol,[dev,qa],{read=1;write=0}|4,dan,[viewer],{read=1;write=0}
 ```
 
-### JSON-min — 100 token, 326 byte
+### JSON-min — 100 tokens, 326 bytes
 
 ```json
 {"users":[{"id":1,"name":"alice","roles":["admin","ops"],"perms":{"read":true,"write":true}},{"id":2,"name":"bob","roles":["dev"],"perms":{"read":true,"write":false}},{"id":3,"name":"carol","roles":["dev","qa"],"perms":{"read":true,"write":false}},{"id":4,"name":"dan","roles":["viewer"],"perms":{"read":true,"write":false}}]}
 ```
 
-### YAML — 135 token, 342 byte
+### YAML — 135 tokens, 342 bytes
 
 ```yaml
 users:
@@ -642,7 +630,7 @@ users:
   ...
 ```
 
-### CSV — 88 token (vince marginalmente ma perde struttura)
+### CSV — 88 tokens (wins marginally but loses structure)
 
 ```csv
 id,name,roles,perms
@@ -650,47 +638,45 @@ id,name,roles,perms
 ...
 ```
 
-CSV "vince" sui token solo perché annega le sub-strutture in stringhe
-non parsabili: round-trip semantico fallito. ADP conserva la struttura
-nativa.
+CSV "wins" on tokens only because it drowns sub-structures in non-parseable
+strings: the semantic round-trip fails. ADP preserves the native structure.
 
-## Immagini
+## Images
 
-Le immagini raster sono un caso speciale. Una volta convertite in
-base64 per il canale testuale, il loro costo in token è dominato dal
-base64 stesso, non dalla sintassi del wrapper. Misura su PNG
-sintetico 128×128 RGBA:
+Raster images are a special case. Once converted to base64 for the text
+channel, their token cost is dominated by the base64 itself, not by the
+wrapper syntax. Measurement on a synthetic 128×128 RGBA PNG:
 
-| Formato | Token cl100k | Note |
+| Format | Token cl100k | Notes |
 |---|---:|---|
-| JSON con `"data_b64":"..."` | 54.462 | base64 + sintassi JSON |
-| ADP con `data=b!...` | 54.457 | base64 + sintassi ADP |
-| RAW base64 puro | 54.425 | nessun wrapper, nessun metadato |
+| JSON with `"data_b64":"..."` | 54,462 | base64 + JSON syntax |
+| ADP with `data=b!...` | 54,457 | base64 + ADP syntax |
+| RAW pure base64 | 54,425 | no wrapper, no metadata |
 
-La differenza fra i tre è inferiore allo 0,1%. Sui binari inline il
-wrapper non conta — è il base64 a dominare il costo.
+The difference between the three is less than 0.1%. On inline binaries the
+wrapper does not matter — base64 dominates the cost.
 
-ADP risolve il problema in due direzioni complementari: trattando le
-immagini come **riferimenti** (ADP-DB) oppure comprimendole con
-**strategie lossy** mirate al consumo LLM (modulo `adp.image`).
+ADP addresses the problem in two complementary directions: treating images as
+**references** (ADP-DB) or compressing them with **lossy strategies** targeted
+at LLM consumption (the `adp.image` module).
 
-### Strategie lossy inline (modulo `adp.image`)
+### Lossy inline strategies (`adp.image` module)
 
-Misure su immagine sorgente PNG 256×256 RGB (gradiente + forme),
-baseline 2.842 token cl100k per la versione lossless:
+Measurements on a source PNG 256×256 RGB (gradient + shapes), baseline 2,842
+cl100k tokens for the lossless version:
 
-| Strategia | Token | Δ vs PNG | Lossless | Caso ideale |
+| Strategy | Tokens | Δ vs PNG | Lossless | Ideal case |
 |---|---:|---:|:---:|---|
-| `passthrough` (PNG inline) | 2.842 | — | ✓ | qualità massima necessaria |
-| `thumbnail_webp` q30 256×256 | 1.438 | **−49%** | ✗ | full-resolution lossy |
-| `thumbnail_jpeg` size=128 q20 | 1.353 | **−52%** | ✗ | qualità decente |
-| `thumbnail_jpeg` size=64 q50 | 934 | **−67%** | ✗ | analisi LLM generica |
-| `thumbnail_jpeg` size=32 q30 | 524 | **−82%** | ✗ | essenza visiva |
+| `passthrough` (PNG inline) | 2,842 | — | ✓ | maximum quality required |
+| `thumbnail_webp` q30 256×256 | 1,438 | **−49%** | ✗ | full-resolution lossy |
+| `thumbnail_jpeg` size=128 q20 | 1,353 | **−52%** | ✗ | decent quality |
+| `thumbnail_jpeg` size=64 q50 | 934 | **−67%** | ✗ | generic LLM analysis |
+| `thumbnail_jpeg` size=32 q30 | 524 | **−82%** | ✗ | visual essence |
 | `hybrid` (thumb 24×24 + pHash + caption) | 550 | **−81%** | ✗ | best balance |
-| `bitmap_8x8` (8×8 RGB raw) | 182 | **−94%** | ✗ | colori dominanti |
-| `caption` (descrizione testuale) | 27 | **−99%** | ✗ | vision offline disponibile |
-| `perceptual_hash` (64-bit) | 11 | **−99,6%** | ✗ | solo similarity check |
-| ADP-DB ref `^id` (dopo bootstrap) | 5 | **−99,8%** | ✓ | asset ricorrente |
+| `bitmap_8x8` (8×8 RGB raw) | 182 | **−94%** | ✗ | dominant colors |
+| `caption` (text description) | 27 | **−99%** | ✗ | offline vision available |
+| `perceptual_hash` (64-bit) | 11 | **−99.6%** | ✗ | similarity check only |
+| ADP-DB ref `^id` (after bootstrap) | 5 | **−99.8%** | ✓ | recurring asset |
 
 ### API
 
@@ -715,16 +701,16 @@ p2 = compress_for_llm(img_b, strategy="perceptual_hash")
 distance = hamming_distance(p1, p2)   # 0 = identici, basso = simili
 ```
 
-Sette strategie disponibili: `passthrough`, `thumbnail_jpeg`,
+Seven strategies available: `passthrough`, `thumbnail_jpeg`,
 `thumbnail_webp`, `perceptual_hash`, `bitmap_8x8`, `caption`,
-`hybrid`. Tutte producono dict compatibili con `adp.encode()`.
+`hybrid`. All produce dicts compatible with `adp.encode()`.
 
-### Strategia ADP-DB per asset ricorrenti
+### ADP-DB strategy for recurring assets
 
-Quando gli stessi asset (avatar, icone, screenshot di riferimento)
-viaggiano più volte tra gli stessi agenti, ADP-DB li promuove a
-identificatori brevi nel database condiviso. Costo bootstrap una
-sola volta, follow-up praticamente gratuiti.
+When the same assets (avatars, icons, reference screenshots) travel multiple
+times between the same agents, ADP-DB promotes them to short identifiers in the
+shared database. Bootstrap cost is paid once; follow-up references are
+essentially free.
 
 ```python
 from adp import ADPStore
@@ -738,82 +724,80 @@ store.save()
 msg = adp.encode({"task": "lookup_user", "avatar_ref": img_id})
 ```
 
-Su un workload di cento chiamate che riutilizzano tre immagini, il
-risparmio totale misurato è di circa **16 milioni di token** rispetto
-all'invio inline ripetuto.
+On a workload of one hundred calls reusing three images, the total measured
+savings are approximately **16 million tokens** compared to repeated inline
+sending.
 
-### Decision tree rapido
+### Quick decision tree
 
-| Necessità | Strategia consigliata |
+| Need | Recommended strategy |
 |---|---|
-| Identificare oggetti specifici in alta risoluzione | `passthrough` o `thumbnail_jpeg` size=256 |
-| LLM deve descrivere o classificare l'immagine | `thumbnail_jpeg` size=64, quality=50 |
-| Solo similarity check tra due immagini | `perceptual_hash` |
-| Asset ricorrenti (icone, avatar, screenshot fissi) | `ADPStore` + riferimenti `^id` |
-| Vision-LLM offline disponibile per caption | strategia `caption` |
-| Best balance generale (analisi + similarity) | `hybrid` |
+| Identify specific objects at high resolution | `passthrough` or `thumbnail_jpeg` size=256 |
+| LLM must describe or classify the image | `thumbnail_jpeg` size=64, quality=50 |
+| Similarity check only between two images | `perceptual_hash` |
+| Recurring assets (icons, avatars, fixed screenshots) | `ADPStore` + `^id` references |
+| Offline vision-LLM available for captions | `caption` strategy |
+| Best general balance (analysis + similarity) | `hybrid` |
 
-Dipendenze opzionali: `pillow` per resize/JPEG/WEBP, `imagehash`
-per pHash. Installa con `uv sync --extra bench`.
+Optional dependencies: `pillow` for resize/JPEG/WEBP, `imagehash`
+for pHash. Install with `uv sync --extra bench`.
 
-## Usare ADP in Claude Code
+## Using ADP in Claude Code
 
-### Risultato A/B reale: report subagent JSON vs ADP
+### Real A/B result: subagent report JSON vs ADP
 
-Test condotto direttamente dentro una sessione Claude Code, dispatchando
-due subagent (modello `claude-haiku-4-5`) con istruzioni IDENTICHE
-sullo stesso task — analizza `src/adp/` e riporta per ogni modulo nome,
-righe, simboli esportati, descrizione — chiedendo a uno il report in
-**JSON** e all'altro in **ADP** (modulo `prompt` di ADP fornisce
-istruzioni few-shot all'agente).
+Test conducted directly inside a Claude Code session, dispatching two subagents
+(model `claude-haiku-4-5`) with IDENTICAL instructions on the same task —
+analyze `src/adp/` and report for each module the name, lines, exported symbols,
+description — asking one for the report in **JSON** and the other in **ADP**
+(the ADP `prompt` module provides few-shot instructions to the agent).
 
-| Formato output | Token (cl100k_base) | Byte |
+| Output format | Tokens (cl100k_base) | Bytes |
 |---|---:|---:|
 | JSON | 766 | 2,696 |
 | **ADP** | **471** | **1,717** |
 
-**ADP risparmia il 38,5% dei token** (295 token in meno) e il 36,3% dei
-byte sul singolo report subagent.
+**ADP saves 38.5% of tokens** (295 fewer tokens) and 36.3% of bytes on a single
+subagent report.
 
-**Impatto economico tipico:** una sessione Claude Code che dispatcha
-50 subagent con report strutturato consuma in input verso
-l'orchestratore circa 25.000 token in JSON contro 15.400 in ADP. Su
-Opus 4.7 ($15/Mtok input):
+**Typical economic impact:** a Claude Code session that dispatches 50 subagents
+with structured reporting consumes approximately 25,000 input tokens in JSON
+versus 15,400 in ADP toward the orchestrator. On Opus 4.7 ($15/Mtok input):
 
-| Configurazione | Costo report subagent / sessione | $/anno (100 sessioni/giorno) |
+| Configuration | Subagent report cost / session | $/year (100 sessions/day) |
 |---|---:|---:|
-| Subagent in JSON | $0,375 | $13.700 |
-| Subagent in ADP | $0,231 | $8.430 |
-| **Risparmio** | **$0,144 (−38%)** | **$5.260** |
+| Subagents in JSON | $0.375 | $13,700 |
+| Subagents in ADP | $0.231 | $8,430 |
+| **Savings** | **$0.144 (−38%)** | **$5,260** |
 
-Sul singolo turno il risparmio è modesto in valore assoluto, ma scala
-linearmente col numero di subagent dispatchati. Workload tipici di
-orchestrazione (planner → executor → reviewer, fan-out di analisi
-parallele, ricerca multi-file) producono decine di report subagent per
-sessione: ADP diventa una scelta economicamente significativa.
+The savings per single turn are modest in absolute value, but they scale
+linearly with the number of subagents dispatched. Typical orchestration workloads
+(planner → executor → reviewer, parallel analysis fan-out, multi-file search)
+produce dozens of subagent reports per session: ADP becomes an economically
+significant choice.
 
-### Plugin pronto (raccomandato)
+### Ready-made plugin (recommended)
 
-Il repository contiene `claude-plugin/`, un plugin Claude Code completo
-con skill, subagent `adp-agent`, nove slash command, hook contestuale e
-script di installazione. Setup in una riga:
+The repository contains `claude-plugin/`, a complete Claude Code plugin with
+skills, an `adp-agent` subagent, nine slash commands, a contextual hook, and
+an installation script. One-line setup:
 
 ```bash
 bash /path/to/GoalLanguageAgents/claude-plugin/install.sh
 # Riavvia Claude Code: /adp-encode, /adp-decode, /adp-bench, ... attivi
 ```
 
-Vedi [`claude-plugin/README.md`](claude-plugin/README.md) per dettagli,
-disinstallazione e personalizzazioni.
+See [`claude-plugin/README.md`](claude-plugin/README.md) for details,
+uninstallation, and customizations.
 
-### Setup manuale (alternativa)
+### Manual setup (alternative)
 
-Se preferisci configurare a mano senza il plugin packaged, sei
-modalità di integrazione, dalla più semplice alla più potente.
+If you prefer to configure manually without the packaged plugin, six integration
+modes are available, from simplest to most powerful.
 
-### 1. CLAUDE.md di progetto
+### 1. Project CLAUDE.md
 
-Aggiungi al `CLAUDE.md` del repository (o crea `.claude/CLAUDE.md`):
+Add to the repository's `CLAUDE.md` (or create `.claude/CLAUDE.md`):
 
 ```markdown
 In questo repo gli agenti comunicano in **ADP** (vedi docs/superpowers/specs).
@@ -823,11 +807,11 @@ Quando serializzi dati strutturati tra subagent / log / artefatti:
 - per umani: `adp.to_markdown(s)` o `adp.to_html(s)`
 ```
 
-Effetto: Claude Code conosce ADP all'avvio della sessione.
+Effect: Claude Code is aware of ADP from the start of the session.
 
-### 2. Slash command custom `/adp`
+### 2. Custom `/adp` slash command
 
-Crea `.claude/commands/adp.md`:
+Create `.claude/commands/adp.md`:
 
 ```markdown
 ---
@@ -838,16 +822,16 @@ argument-hint: <encode|decode|to-md|to-html|sign|verify|bench> [opts]
 Esegui `uv run --directory /path/to/GoalLanguageAgents adp $ARGUMENTS`.
 ```
 
-In sessione: `/adp encode < input.json`, `/adp serve --port 8000`, ecc.
+In session: `/adp encode < input.json`, `/adp serve --port 8000`, etc.
 
-### 3. Subagent dedicato
+### 3. Dedicated subagent
 
-Crea `.claude/agents/adp-agent.md` con istruzione di rispondere sempre
-in ADP. Utile per estrazioni, classificazioni, report.
+Create `.claude/agents/adp-agent.md` with the instruction to always respond
+in ADP. Useful for extractions, classifications, and reports.
 
 ### 4. MCP server
 
-Espone ADP come tool nativo MCP:
+Exposes ADP as a native MCP tool:
 
 ```python
 # mcp-adp/server.py
@@ -872,7 +856,7 @@ if __name__ == "__main__":
     mcp.run()
 ```
 
-Registra in `~/.claude/.mcp.json`:
+Register in `~/.claude/.mcp.json`:
 
 ```json
 {
@@ -886,10 +870,10 @@ Registra in `~/.claude/.mcp.json`:
 }
 ```
 
-Riavvia Claude Code → ora ha `mcp__adp__encode/decode/to_html/...` come
-tool nativi.
+Restart Claude Code → it now has `mcp__adp__encode/decode/to_html/...` as
+native tools.
 
-### 5. Hook SessionStart per pre-caricare il prompt
+### 5. SessionStart hook to pre-load the prompt
 
 In `~/.claude/settings.json`:
 
@@ -907,12 +891,11 @@ In `~/.claude/settings.json`:
 }
 ```
 
-Effetto: all'avvio sessione il prompt di sistema ADP è già nel
-contesto.
+Effect: the ADP system prompt is already in context when the session starts.
 
-### 6. Allowlist permission
+### 6. Permission allowlist
 
-Per evitare conferme manuali ad ogni invocazione, aggiungi a
+To avoid manual confirmations on every invocation, add to
 `.claude/settings.json`:
 
 ```json
@@ -926,7 +909,7 @@ Per evitare conferme manuali ad ogni invocazione, aggiungi a
 }
 ```
 
-### Verifica setup completo
+### Verify complete setup
 
 ```bash
 uv run adp --version           # libreria raggiungibile
@@ -935,28 +918,26 @@ ls .claude/commands/adp.md     # slash command attivo
 ls .claude/agents/adp-agent.md # subagent attivo
 ```
 
-## Integrità — sign / verify
+## Integrity — sign / verify
 
-ADP di base non protegge un messaggio in transito: garantisce solo
-round-trip semantico (`decode(encode(x)) == x`). Per detectare
-corruzioni accidentali o modifiche intenzionali (incluse alterazioni
-prodotte da un LLM intermediario), la libreria offre il modulo
-opzionale `adp.integrity`, che appende un trailer della forma
-`;_chk=<algo>:<hex>` al messaggio.
+ADP at its base does not protect a message in transit: it only guarantees
+semantic round-trip (`decode(encode(x)) == x`). To detect accidental
+corruption or intentional modifications (including alterations produced by an
+intermediary LLM), the library provides the optional `adp.integrity` module,
+which appends a trailer of the form `;_chk=<algo>:<hex>` to the message.
 
-### Tre algoritmi disponibili
+### Three available algorithms
 
-| Algoritmo | Hex | Overhead token | Forza | Caso ideale |
+| Algorithm | Hex | Token overhead | Strength | Ideal case |
 |---|---:|---:|---|---|
-| `crc32` | 8 char | +~12 token | detection corruzione casuale | canale già autenticato (TLS), serve solo robustezza |
-| `sha256` | 64 char | +~42 token | detection crittografica | LLM in mezzo (può alterare il testo) |
-| `hmac` | 64 char | +~42 token | detection + autenticità mittente | flotte multi-agente con chiave condivisa |
+| `crc32` | 8 chars | ~+12 tokens | casual corruption detection | already authenticated channel (TLS), robustness only |
+| `sha256` | 64 chars | ~+42 tokens | cryptographic detection | LLM in the middle (may alter text) |
+| `hmac` | 64 chars | ~+42 tokens | detection + sender authenticity | multi-agent fleets with shared key |
 
-L'overhead è **costante** (non scala con la lunghezza del payload),
-quindi è proporzionalmente più caro sui messaggi piccoli e
-trascurabile su quelli grandi.
+The overhead is **constant** (it does not scale with payload length), so it is
+proportionally more expensive on small messages and negligible on large ones.
 
-### API Python
+### Python API
 
 ```python
 import adp
@@ -978,7 +959,7 @@ clean = adp.integrity.verify(signed, key=b"shared-secret")
 data = adp.decode(clean)
 ```
 
-### Uso da CLI
+### CLI usage
 
 ```bash
 # Firma da pipeline
@@ -1002,47 +983,46 @@ echo '{"x":1}' | uv run adp encode | uv run adp sign --algo hmac --key-file /tmp
 echo '<msg>' | uv run adp verify --key-file /tmp/k.key
 ```
 
-Opzioni `adp sign`:
+`adp sign` options:
 - `--algo crc32|sha256|hmac` (default `sha256`)
-- `--key STRING` chiave HMAC inline (visibile nella shell history)
-- `--key-file PATH` chiave HMAC da file (consigliato)
+- `--key STRING` inline HMAC key (visible in shell history)
+- `--key-file PATH` HMAC key from file (recommended)
 
-Opzioni `adp verify`:
-- `--key` / `--key-file` per HMAC
-- `--strict/--no-strict` se richiedere o no la presenza del trailer
-- `--strip-only` rimuove il trailer senza verificarlo (sconsigliato)
+`adp verify` options:
+- `--key` / `--key-file` for HMAC
+- `--strict/--no-strict` whether to require the presence of the trailer
+- `--strip-only` removes the trailer without verifying it (not recommended)
 
-### Caso d'uso più rilevante: detection alterazioni LLM
+### Most relevant use case: LLM alteration detection
 
-Quando un agente comunica attraverso un LLM intermediario, il modello
-**può modificare silenziosamente** il messaggio: cambiare whitespace,
-alterare un escape, aggiungere o togliere un carattere. Senza
-checksum il destinatario non se ne accorge, e i dati corrotti
-proseguono nella pipeline.
+When an agent communicates through an intermediary LLM, the model **can
+silently modify** the message: change whitespace, alter an escape character,
+add or remove a character. Without a checksum the receiver does not notice, and
+the corrupted data continues through the pipeline.
 
 ```
-Agente A → encode → sign(sha256) → LLM B (forward) → verify → Agente C
+Agent A → encode → sign(sha256) → LLM B (forward) → verify → Agent C
                                        │
                                        └─ se modifica anche 1 byte
                                           → IntegrityError lato C
 ```
 
-In ambienti dove l'LLM è solo un router/orchestrator del messaggio,
-firmare con SHA-256 è il modo standard per garantire che il payload
-arrivi intatto. Per autenticità del mittente (non solo integrità)
-usare HMAC con chiave condivisa fuori-canale.
+In environments where the LLM is only a message router/orchestrator, signing
+with SHA-256 is the standard way to ensure the payload arrives intact. For
+sender authenticity (not just integrity), use HMAC with an out-of-band shared
+key.
 
-### Quando NON serve
+### When it is NOT needed
 
-| Canale | Integrità built-in? | Serve `adp.integrity`? |
+| Channel | Built-in integrity? | Need `adp.integrity`? |
 |---|---|---|
-| HTTPS / gRPC / TLS | sì (TLS) | no (ridondante) |
-| File su disco condiviso | no | sì (CRC32 basta) |
-| Coda di messaggi (Redis, RabbitMQ) | no | sì (CRC32 o SHA-256) |
-| **LLM in mezzo** (agent → LLM → agent) | **NO** | **sì, SHA-256 o HMAC** |
-| Storage long-term (audit log) | no | sì (SHA-256 per bit-rot) |
+| HTTPS / gRPC / TLS | yes (TLS) | no (redundant) |
+| File on shared disk | no | yes (CRC32 is enough) |
+| Message queue (Redis, RabbitMQ) | no | yes (CRC32 or SHA-256) |
+| **LLM in the middle** (agent → LLM → agent) | **NO** | **yes, SHA-256 or HMAC** |
+| Long-term storage (audit log) | no | yes (SHA-256 for bit-rot) |
 
-## Struttura del progetto
+## Project structure
 
 ```
 GoalLanguageAgents/
@@ -1082,7 +1062,7 @@ GoalLanguageAgents/
 └── README.md
 ```
 
-## Sviluppo e test
+## Development and testing
 
 ```bash
 uv sync --all-extras
@@ -1092,20 +1072,20 @@ uv run python -m benchmarks.compare_formats  # rigenera benchmark
 uv run adp bench < tests/fixtures/example.json
 ```
 
-La libreria core non ha dipendenze runtime oltre alla stdlib.
+The core library has no runtime dependencies beyond the standard library.
 
 ## Roadmap
 
-- **v0.3.5 (corrente)** — **`ADPSession` completo**: dynamic LUT
-  HPACK-style, differential encoding inter-message, capability negotiation
-  con auto-degrade, tokenizer-aware cost estimation, pre-warm da corpus,
-  TPD auto-promotion. Riduce i token del ~60% rispetto a TOON su workload
-  multi-turn realistici. Vedi sezione [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding).
-- **v0.4** — envelope opzionale (`from`, `to`, `id`, `intent`, `reply_to`)
-  per protocolli inter-agente espliciti.
-- **v0.5** — schema/contract opzionale, codegen Pydantic.
-- **v0.6** — implementazione di riferimento in TypeScript.
+- **v0.3.5 (current)** — **complete `ADPSession`**: dynamic LUT
+  HPACK-style, differential inter-message encoding, capability negotiation
+  with auto-degrade, tokenizer-aware cost estimation, corpus pre-warm,
+  TPD auto-promotion. Reduces tokens by ~60% compared to TOON on realistic
+  multi-turn workloads. See the [Dynamic LUT](#dynamic-lut-hpack-style--differential-encoding) section.
+- **v0.4** — optional envelope (`from`, `to`, `id`, `intent`, `reply_to`)
+  for explicit inter-agent protocols.
+- **v0.5** — optional schema/contract, Pydantic codegen.
+- **v0.6** — reference implementation in TypeScript.
 
-## Licenza
+## License
 
 MIT.
