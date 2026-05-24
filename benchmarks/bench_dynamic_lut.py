@@ -151,6 +151,32 @@ def run() -> None:
         assert decoded == m, "round-trip rotto (combo)"
         dyn_combo_tokens += _tok(encoded)
 
+    # Dynamic LUT + diff encoding (cold)
+    sender_diff = adp.ADPSession(path=None, auto_save=False, enable_diff=True)
+    receiver_diff = adp.ADPSession(path=None, auto_save=False, enable_diff=True)
+    dyn_diff_tokens = 0
+    for m in msgs:
+        encoded = sender_diff.encode(m)
+        decoded = receiver_diff.decode(encoded)
+        assert decoded == m, "round-trip rotto (diff)"
+        dyn_diff_tokens += _tok(encoded)
+
+    # Full stack: dyn LUT + static + diff
+    sender_full = adp.ADPSession(
+        path=None, auto_save=False, static_lut=adp.DEFAULT_AGENT_LUT,
+        enable_diff=True,
+    )
+    receiver_full = adp.ADPSession(
+        path=None, auto_save=False, static_lut=adp.DEFAULT_AGENT_LUT,
+        enable_diff=True,
+    )
+    full_stack_tokens = 0
+    for m in msgs:
+        encoded = sender_full.encode(m)
+        decoded = receiver_full.decode(encoded)
+        assert decoded == m, "round-trip rotto (full stack)"
+        full_stack_tokens += _tok(encoded)
+
     baseline = json_tokens
     print(f"\n{'='*70}")
     print(f"Benchmark: 20-message agent conversation")
@@ -164,6 +190,8 @@ def run() -> None:
     print(f"{'ADP + static LUT':<35} {fmt(adp_static_tokens, baseline)}")
     print(f"{'ADP + dynamic LUT (cold)':<35} {fmt(dyn_cold_tokens, baseline)}")
     print(f"{'ADP + dynamic + static LUT':<35} {fmt(dyn_combo_tokens, baseline)}")
+    print(f"{'ADP + dyn LUT + diff':<35} {fmt(dyn_diff_tokens, baseline)}")
+    print(f"{'ADP + full stack (lut+static+diff)':<35} {fmt(full_stack_tokens, baseline)}")
     print(f"{'TOON':<35} {fmt(toon_tokens, baseline)}")
     print(f"{'-'*70}")
 
@@ -176,6 +204,8 @@ def run() -> None:
     print(f"{'ADP + static LUT':<35} {delta_toon(adp_static_tokens):>15}")
     print(f"{'ADP + dynamic LUT (cold)':<35} {delta_toon(dyn_cold_tokens):>15}")
     print(f"{'ADP + dynamic + static LUT':<35} {delta_toon(dyn_combo_tokens):>15}")
+    print(f"{'ADP + dyn LUT + diff':<35} {delta_toon(dyn_diff_tokens):>15}")
+    print(f"{'ADP + full stack':<35} {delta_toon(full_stack_tokens):>15}")
     print(f"{'-'*70}\n")
 
     # Statistiche dyn LUT
@@ -186,6 +216,14 @@ def run() -> None:
     print(f"Statistiche dynamic+static LUT:")
     print(f"  entries finali: {sender_combo.stats()['entries_count']}")
     print(f"  hit count (decoder): {receiver_combo.stats()['hit_count']}")
+    print()
+    print(f"Statistiche dynamic LUT + diff:")
+    print(f"  entries finali: {sender_diff.stats()['entries_count']}")
+    print(f"  hit count (decoder): {receiver_diff.stats()['hit_count']}")
+    print()
+    print(f"Statistiche full stack (dyn+static+diff):")
+    print(f"  entries finali: {sender_full.stats()['entries_count']}")
+    print(f"  hit count (decoder): {receiver_full.stats()['hit_count']}")
     print()
 
 
