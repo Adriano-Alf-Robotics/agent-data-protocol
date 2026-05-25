@@ -134,3 +134,50 @@ def test_render_dashboard_cost_estimate():
     """Cost section shows dollar estimates."""
     html = render_dashboard(_make_history())
     assert "$" in html
+
+
+from click.testing import CliRunner
+from adp.cli import main as cli_main
+
+
+def test_cli_dashboard_generates_html(tmp_path):
+    """adp dashboard --path <lut_file> writes HTML to stdout."""
+    p = tmp_path / "lut_state.json"
+    s = ADPSession(path=str(p), auto_save=False, announce_caps=False)
+    for i in range(5):
+        s.encode({"task": f"t{i}", "value": i})
+    s.save()
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["dashboard", "--path", str(p)])
+    assert result.exit_code == 0
+    assert "<!DOCTYPE html>" in result.output
+    assert "<svg" in result.output
+
+
+def test_cli_dashboard_output_file(tmp_path):
+    """adp dashboard --output writes to file instead of stdout."""
+    p = tmp_path / "lut_state.json"
+    s = ADPSession(path=str(p), auto_save=False, announce_caps=False)
+    s.encode({"x": 1})
+    s.save()
+
+    out = tmp_path / "report.html"
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["dashboard", "--path", str(p), "--output", str(out)])
+    assert result.exit_code == 0
+    assert out.exists()
+    content = out.read_text()
+    assert "<!DOCTYPE html>" in content
+
+
+def test_cli_dashboard_no_history(tmp_path):
+    """adp dashboard with no history shows empty state."""
+    p = tmp_path / "lut_state.json"
+    s = ADPSession(path=str(p), auto_save=False, announce_caps=False)
+    s.save()
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["dashboard", "--path", str(p)])
+    assert result.exit_code == 0
+    assert "nessun dato" in result.output.lower() or "no data" in result.output.lower()

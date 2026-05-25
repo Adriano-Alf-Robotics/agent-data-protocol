@@ -204,5 +204,35 @@ def cmd_prompt(few_shot: bool) -> None:
     click.echo(out)
 
 
+@main.command("dashboard")
+@click.option("--path", default=None, type=click.Path(),
+              help="Path to lut_state.json (default: ~/.adp/lut_state.json)")
+@click.option("--output", "-o", default=None, type=click.Path(),
+              help="Write HTML to file instead of stdout")
+@click.option("--title", default="ADP Dashboard", help="Page title")
+def cmd_dashboard(path: str | None, output: str | None, title: str) -> None:
+    """Generate a standalone HTML dashboard from session metrics."""
+    from pathlib import Path as P
+    from adp.session import ADPSession, DEFAULT_PATH
+
+    lut_path = P(path) if path else DEFAULT_PATH
+    if not lut_path.exists():
+        raise click.ClickException(
+            f"Session file not found: {lut_path}\n"
+            f"Use ADPSession to generate metrics first."
+        )
+
+    session = ADPSession(path=str(lut_path), auto_save=False, announce_caps=False)
+    from adp.dashboard import render_dashboard
+    html = render_dashboard(session.history, title=title)
+
+    if output:
+        out_path = P(output)
+        out_path.write_text(html, encoding="utf-8")
+        click.echo(f"Dashboard written to {out_path}", err=True)
+    else:
+        sys.stdout.write(html)
+
+
 if __name__ == "__main__":
     main()
