@@ -2,14 +2,15 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Python ≥3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
+![CI](https://github.com/AdrianoDalPastro/agent-data-protocol/actions/workflows/ci.yml/badge.svg)
 
 **Formato testuale lossless e aggressivamente token-efficient per la comunicazione tra agenti AI.**
 
-ADP (versione 0.2) è una libreria Python che definisce e implementa un
-piccolo linguaggio di serializzazione progettato specificamente per lo
-scambio di messaggi tra modelli linguistici. Non è pensato per essere
-letto da un essere umano a prima vista: a quello pensano i convertitori
-in Markdown leggibile e in JSON canonico.
+ADP è una libreria Python che definisce e implementa un piccolo
+linguaggio di serializzazione progettato specificamente per lo scambio di
+messaggi tra modelli linguistici. Non è pensato per essere letto da un
+essere umano a prima vista: a quello pensano i convertitori in Markdown
+leggibile e in JSON canonico.
 
 L'obiettivo è ridurre il numero di token che gli agenti spendono per
 parlarsi preservando tutta l'informazione strutturale di un payload JSON
@@ -1050,34 +1051,23 @@ agent-data-protocol/
 │   ├── __init__.py        API pubblica
 │   ├── parser.py          ADP → Python (recursive-descent, zero deps)
 │   ├── serializer.py      Python → ADP
-│   ├── converters.py      JSON / Markdown (con _adp_bytes tag)
-│   ├── prompt.py          system prompt + 8 few-shot pairs
-│   ├── lut.py             LUT condivisa per chiavi (DEFAULT_AGENT_LUT)
+│   ├── converters.py      JSON / Markdown / HTML
+│   ├── prompt.py          system prompt + few-shot per LLM
+│   ├── lut.py             LUT statica (DEFAULT_AGENT_LUT) + helper
 │   ├── tpd.py             Token-aware Phrase Dictionary + learn_lut
-│   ├── db.py              ADPStore: DB persistente di blob testuali
+│   ├── db.py              ADPStore: content-addressed blob store
 │   ├── image.py           7 strategie compressione immagini per LLM
 │   ├── integrity.py       sign / verify (CRC32, SHA-256, HMAC)
 │   ├── serve.py           live HTML viewer via SSE (append-only)
-│   └── cli.py             CLI Click (encode/decode/sign/verify/serve/...)
-├── tests/
-│   ├── test_roundtrip.py        round-trip su 23 payload
-│   ├── test_converters.py       JSON e Markdown
-│   ├── test_v02_features.py     bytes, bare ampliate, nested tables
-│   ├── test_lut.py              LUT key shortening
-│   ├── test_tpd_db.py           TPD + ADPStore
-│   ├── test_image.py            7 strategie immagine
-│   └── test_integrity.py        sign / verify / tampering detection
-├── benchmarks/
-│   ├── payloads.py         18 payload (6 famiglie × IT/EN/ZH + binary)
-│   ├── encoders.py         adattatori JSON/YAML/TOML/MsgPack/XML/CSV/RAW
-│   ├── compare_formats.py  runner che genera results.md
-│   └── results.md          report generato (~110 KB)
-├── docs/
-│   ├── superpowers/specs/2026-05-22-adp-design.md   design doc v0.2
-│   └── ADP-relazione-completa.md                     relazione tecnica
-├── examples/
-│   ├── quickstart.py             demo base
-│   └── two_agents_db.py          demo LUT/DB condivisa
+│   ├── cli.py             CLI (encode/decode/sign/verify/serve/bench/...)
+│   ├── cost.py            TokenizerCostEstimator (tiktoken, opzionale)
+│   ├── diff.py            compute_diff / apply_diff (set + del)
+│   └── session.py         ADPSession — dynamic LUT, diff, caps, warmup, TPD
+├── tests/                 244 test
+├── benchmarks/            payload, encoder, risultati
+├── docs/                  documentazione estesa
+├── examples/              quickstart.py, two_agents_db.py
+├── claude-plugin/         plugin Claude Code pronto all'uso
 ├── pyproject.toml
 └── README.md
 ```
@@ -1086,7 +1076,7 @@ agent-data-protocol/
 
 ```bash
 uv sync --all-extras
-uv run pytest                              # 80 test
+uv run pytest                              # 244 test
 uv run pytest --cov=adp                    # con coverage
 uv run python -m benchmarks.compare_formats  # rigenera benchmark
 uv run adp bench < tests/fixtures/example.json

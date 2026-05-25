@@ -2,6 +2,7 @@
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Python ≥3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
+![CI](https://github.com/AdrianoDalPastro/agent-data-protocol/actions/workflows/ci.yml/badge.svg)
 
 > 🇮🇹 Per la versione italiana: [README.it.md](README.it.md)
 
