@@ -15,7 +15,7 @@ for the spec, benchmarks, and APIs.
 |---|---|---|
 | **Skill `adp`** | contextual instruction: when serializing structured data use ADP, not JSON | `skills/adp/SKILL.md` |
 | **Subagent `adp-agent`** | delegatable task that *always* replies in ADP | `agents/adp-agent.md` |
-| **9 slash commands** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt` | `commands/*.md` |
+| **10 slash commands** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt`, `/adp-dashboard` | `commands/*.md` |
 | **Hook SessionStart** | annotates ADP projects at session start | `hooks/session-start.sh` |
 
 ## Prerequisites
@@ -35,7 +35,30 @@ pipx install /path/to/agent-data-protocol
 
 ## Plugin installation
 
-### Method 1 — symbolic link (development)
+### Recommended — cross-platform script
+
+Works on Linux, macOS, and Windows:
+
+```bash
+python3 /path/to/agent-data-protocol/claude-plugin/install.py
+```
+
+On Linux/macOS the bash wrapper also works:
+
+```bash
+bash /path/to/agent-data-protocol/claude-plugin/install.sh
+```
+
+The installer creates a symbolic link (preferred) or a directory copy
+(fallback on Windows without Developer Mode) at
+`~/.claude/plugins/cache/local/adp`, and registers the plugin in
+`installed_plugins.json`.
+
+The plugin includes a **self-healing** mechanism: if the cache link is
+lost (e.g. after a plugin cache cleanup), the SessionStart hook
+automatically recreates it on the next session start.
+
+### Alternative — manual symbolic link
 
 ```bash
 mkdir -p ~/.claude/plugins/cache/local
@@ -43,27 +66,7 @@ ln -sf /path/to/agent-data-protocol/claude-plugin \
        ~/.claude/plugins/cache/local/adp
 ```
 
-Edit `~/.claude/plugins/installed_plugins.json` by adding:
-
-```json
-{
-  "local/adp": "0.3.5"
-}
-```
-
-### Method 2 — direct copy
-
-```bash
-mkdir -p ~/.claude/plugins/cache/adp/0.3.5
-cp -r /path/to/agent-data-protocol/claude-plugin/* \
-      ~/.claude/plugins/cache/adp/0.3.5/
-```
-
-### Method 3 — automated script
-
-```bash
-bash /path/to/agent-data-protocol/claude-plugin/install.sh
-```
+Then add the entry to `~/.claude/plugins/installed_plugins.json` manually.
 
 ## Verification
 
@@ -79,30 +82,27 @@ Or ask Claude Code:
 
 ## Uninstallation
 
-Use the bundled script:
+Cross-platform:
+
+```bash
+python3 /path/to/agent-data-protocol/claude-plugin/uninstall.py
+```
+
+Or via bash wrapper:
 
 ```bash
 bash /path/to/agent-data-protocol/claude-plugin/uninstall.sh
 ```
 
-It removes the symlink at `~/.claude/plugins/cache/local/adp` and cleans
-the entry from `~/.claude/plugins/installed_plugins.json` (both v2 nested
-format and legacy top-level if present). Restart Claude Code afterwards.
-
-Manual alternative:
-
-```bash
-rm ~/.claude/plugins/cache/local/adp
-# then edit ~/.claude/plugins/installed_plugins.json
-# remove "adp@local" key from the "plugins" section
-```
+Both remove the cache link and clean the entry from
+`installed_plugins.json`. Restart Claude Code afterwards.
 
 ## Updates
 
-If you installed via symbolic link (method 1), simply update the
-ADP repository — the plugin follows automatically.
+If installed via symbolic link (the default on Linux/macOS), simply
+update the ADP repository — the plugin follows automatically.
 
-For a direct copy, re-run `install.sh` or update manually.
+On Windows (directory copy fallback), re-run `install.py` to refresh.
 
 ## Typical use case
 

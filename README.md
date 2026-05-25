@@ -33,11 +33,13 @@ See [docs/dynamic-lut.md](docs/dynamic-lut.md) and [docs/benchmarks.md](docs/ben
 5. [Syntax cheat sheet](#syntax-cheat-sheet)
 6. [Converters](#converters)
 7. [AI agent integration](#ai-agent-integration)
-8. [Project structure](#project-structure)
-9. [Development and testing](#development-and-testing)
-10. [Roadmap](#roadmap)
-11. [Documentation](#documentation)
-12. [License](#license)
+8. [Claude Code plugin](#claude-code-plugin)
+9. [Dashboard](#dashboard)
+10. [Project structure](#project-structure)
+11. [Development and testing](#development-and-testing)
+12. [Roadmap](#roadmap)
+13. [Documentation](#documentation)
+14. [License](#license)
 
 ---
 
@@ -226,6 +228,123 @@ obj = session.decode(msg)
 Full reference: [docs/dynamic-lut.md](docs/dynamic-lut.md).
 
 > **Note:** dynamic LUT aliases use the reserved `_N` pattern (underscore + digits). Payload keys or values matching `_\d+` (e.g. `{"_0": "literal"}`) will raise `ADPLUTSyncError` on decode.
+
+## Claude Code plugin
+
+ADP ships with a ready-made Claude Code plugin that provides automatic
+project detection, nine slash commands, a dedicated subagent, and a
+SessionStart hook for metrics tracking.
+
+### Installation
+
+Cross-platform (Linux, macOS, Windows):
+
+```bash
+python3 claude-plugin/install.py
+```
+
+On Linux/macOS the convenience wrapper also works:
+
+```bash
+bash claude-plugin/install.sh
+```
+
+Restart Claude Code after installation. The plugin self-heals: if the
+cache link is lost (e.g. after a plugin cache cleanup), the SessionStart
+hook recreates it automatically on the next session start.
+
+### Uninstallation
+
+```bash
+python3 claude-plugin/uninstall.py
+```
+
+### What you get
+
+| Feature | Description |
+|---|---|
+| **Slash commands** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt`, `/adp-dashboard` |
+| **Subagent** | `adp-agent` — responds in ADP format, useful for structured extractions |
+| **Skill** | `adp` — teaches Claude when and how to use ADP in agent communication |
+| **SessionStart hook** | Auto-detects ADP projects (via `.adp-project` file or `pyproject.toml` dependency), exports `ADP_PROJECT` env var, enables per-project metrics |
+| **Permission allowlist** | Pre-configured `Bash(uv run adp:*)` rules to avoid confirmation prompts |
+
+### Project detection
+
+The hook looks for two markers in the working directory:
+
+1. A `.adp-project` file (content = project name, or empty = use directory name)
+2. `"adp"` in `pyproject.toml` dependencies
+
+When detected, the hook sets `ADP_PROJECT` and prints available commands.
+Metrics accumulate in `~/.adp/projects/<name>/` and can be visualized
+with `/adp-dashboard`.
+
+### Manual setup (alternative)
+
+If you prefer to configure without the packaged plugin, six integration
+modes are available — from simplest to most powerful. See
+[docs/claude-code.md](docs/claude-code.md) for detailed instructions
+covering CLAUDE.md snippets, custom slash commands, subagent setup, MCP
+server, SessionStart hooks, and permission allowlists.
+
+## Dashboard
+
+ADP includes a built-in dashboard that generates a standalone HTML page
+with interactive SVG charts showing token savings, LUT statistics,
+encode/decode latency, and cost estimates per LLM provider.
+
+### Per-project sessions
+
+`ADPSession` supports per-project tracking. Pass a `project` name and
+metrics are stored separately under `~/.adp/projects/<name>/`:
+
+```python
+session = adp.ADPSession(project="my-api")
+msg = session.encode({"task": "deploy", "version": "2.1.0"})
+# Metrics saved to ~/.adp/projects/my-api/lut_state.json
+```
+
+### Generate a dashboard
+
+From the command line:
+
+```bash
+# All projects at once (discovers ~/.adp/projects/*)
+uv run adp dashboard -o dashboard.html
+
+# Single project
+uv run adp dashboard --project my-api -o dashboard.html
+
+# From a specific session file
+uv run adp dashboard --path ./custom_lut.json -o dashboard.html
+```
+
+Or from Python:
+
+```python
+import adp
+from pathlib import Path
+
+session = adp.ADPSession(project="my-api")
+# ... encode/decode messages ...
+html = adp.render_dashboard(session.history, title="My API savings")
+Path("dashboard.html").write_text(html)
+```
+
+The generated page includes:
+
+- **Summary cards** — total messages, tokens saved, average saving %, LUT hit rate
+- **Bar chart** — per-message token comparison (ADP vs JSON)
+- **Cumulative savings** — running total of tokens saved over time
+- **Cost estimates** — savings in $ per LLM provider (Claude, GPT-4o, etc.)
+- **Latency table** — encode/decode avg/min/max in milliseconds
+- **LUT gauge** — hit rate visualization with entry statistics
+
+Multi-project mode adds a comparison table across all discovered projects
+with per-project drill-down sections.
+
+No external dependencies. Auto dark mode. Works in any browser.
 
 ## Project structure
 

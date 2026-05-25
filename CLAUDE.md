@@ -43,13 +43,14 @@ src/adp/
 ├── cli.py          CLI (encode/decode/sign/verify/serve/bench/prompt/...)
 ├── cost.py         TokenizerCostEstimator (tiktoken-aware, optional dep)
 ├── diff.py         compute_diff / apply_diff (set + del operations)
-└── session.py      ADPSession — dynamic LUT, diff, caps, warmup, TPD (~800 LOC)
+├── dashboard.py    HTML dashboard with SVG charts (token savings, LUT, latency, cost)
+└── session.py      ADPSession — dynamic LUT, diff, caps, warmup, TPD (~870 LOC)
 ```
 
 ## Development conventions
 
 - **Package manager:** `uv`. Use `uv run pytest`, `uv run python -m benchmarks.bench_dynamic_lut`, etc.
-- **Testing:** `pytest`, TDD strongly preferred. Suite **244 tests**, must stay green.
+- **Testing:** `pytest`, TDD strongly preferred. Suite **258 tests**, must stay green.
   - Run all: `uv run pytest -q`
   - Run one: `uv run pytest tests/test_session.py::test_xxx -v`
 - **Optional extras:**

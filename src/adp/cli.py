@@ -204,5 +204,61 @@ def cmd_prompt(few_shot: bool) -> None:
     click.echo(out)
 
 
+@main.command("dashboard")
+@click.option("--path", default=None, type=click.Path(),
+              help="Path to a specific lut_state.json")
+@click.option("--project", default=None,
+              help="Show dashboard for a specific project only")
+@click.option("--output", "-o", default=None, type=click.Path(),
+              help="Write HTML to file instead of stdout")
+@click.option("--title", default="ADP Dashboard", help="Page title")
+def cmd_dashboard(path: str | None, project: str | None,
+                  output: str | None, title: str) -> None:
+    """Generate a standalone HTML dashboard from session metrics.
+
+    Without --path or --project, discovers all projects under ~/.adp/projects/.
+    """
+    from pathlib import Path as P
+    import adp.session as _sess_mod
+    from adp.session import ADPSession
+    from adp.dashboard import render_dashboard, render_multi_dashboard, discover_projects
+
+    if path:
+        # Explicit path: single project
+        lut_path = P(path)
+        if not lut_path.exists():
+            raise click.ClickException(f"Session file not found: {lut_path}")
+        session = ADPSession(path=str(lut_path), auto_save=False, announce_caps=False)
+        html = render_dashboard(session.history, title=title)
+    elif project:
+        # Named project
+        lut_path = P(_sess_mod.PROJECTS_DIR).expanduser() / project / "lut_state.json"
+        if not lut_path.exists():
+            raise click.ClickException(
+                f"Project '{project}' not found at {lut_path}")
+        session = ADPSession(path=str(lut_path), auto_save=False, announce_caps=False)
+        html = render_dashboard(session.history, title=f"{title} — {project}")
+    else:
+        # Discover all projects
+        projects_list = discover_projects(_sess_mod.PROJECTS_DIR)
+        if not projects_list:
+            # Fallback: try default single-file path
+            default = P(_sess_mod.DEFAULT_PATH).expanduser()
+            if default.exists():
+                session = ADPSession(path=str(default), auto_save=False, announce_caps=False)
+                html = render_dashboard(session.history, title=title)
+            else:
+                html = render_multi_dashboard([], title=title)
+        else:
+            html = render_multi_dashboard(projects_list, title=title)
+
+    if output:
+        out_path = P(output)
+        out_path.write_text(html, encoding="utf-8")
+        click.echo(f"Dashboard written to {out_path}", err=True)
+    else:
+        sys.stdout.write(html)
+
+
 if __name__ == "__main__":
     main()

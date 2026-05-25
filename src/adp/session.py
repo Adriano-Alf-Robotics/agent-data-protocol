@@ -53,6 +53,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -82,7 +83,10 @@ class ADPDiffSyncError(Exception):
 
 
 DEFAULT_PATH = "~/.adp/lut_state.json"
+PROJECTS_DIR = "~/.adp/projects"
 SCHEMA_VERSION = 1
+
+_SENTINEL = object()  # marks "path not explicitly provided"
 
 
 class ADPSession:
@@ -95,7 +99,8 @@ class ADPSession:
 
     def __init__(
         self,
-        path: str | Path | None = DEFAULT_PATH,
+        path: str | Path | None = _SENTINEL,  # type: ignore[assignment]
+        project: str | None = None,
         max_entries: int = 256,
         static_lut: dict[str, str] | None = None,
         k_threshold: int = 2,
@@ -109,8 +114,15 @@ class ADPSession:
         tpd_promote_max_per_run: int = 10,
     ) -> None:
         # Path resolution
+        self._project = project
+        # Resolve sentinel: no path given → use DEFAULT_PATH (read from module attr)
+        if path is _SENTINEL:
+            path = DEFAULT_PATH
         if path is None:
             self._path: Path | None = None  # in-memory only
+        elif project is not None and path == DEFAULT_PATH:
+            # Project mode: use projects directory (reads module-level PROJECTS_DIR)
+            self._path = Path(PROJECTS_DIR).expanduser() / project / "lut_state.json"
         elif isinstance(path, str):
             override = os.environ.get("ADP_LUT_PATH")
             chosen = override if override else path
@@ -133,6 +145,7 @@ class ADPSession:
             "miss_count": 0,
             "evictions": 0,
         }
+        self._history: list[dict] = []
 
         self._cost_estimator: TokenizerCostEstimator | None = cost_estimator
 
@@ -184,10 +197,12 @@ class ADPSession:
             self._path.rename(backup)
             return
 
+        self._project = data.get("project", self._project)
         self._entries = dict(data.get("entries", {}))
         self._lru_order = list(data.get("lru_order", []))
         self._next_alias_id = int(data.get("next_alias_id", 0))
         self._stats.update(data.get("stats", {}))
+        self._history = list(data.get("history", []))
         self._inv = {v: k for k, v in self._entries.items()}
 
     def save(self) -> None:
@@ -196,10 +211,12 @@ class ADPSession:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "version": SCHEMA_VERSION,
+            "project": self._project,
             "entries": dict(self._entries),
             "lru_order": list(self._lru_order),
             "next_alias_id": self._next_alias_id,
             "stats": dict(self._stats),
+            "history": list(self._history),
         }
         # Atomic write: temp + rename in stessa directory
         fd, tmp_path_str = tempfile.mkstemp(
@@ -325,6 +342,7 @@ class ADPSession:
         - Altrimenti: usa dynamic LUT + diff (se enable_diff).
         - Aggiorna baseline state.
         """
+        _t0 = time.perf_counter()
         caps_prefix = self._build_caps_prefix()
 
         # Auto-degrade check
@@ -347,6 +365,7 @@ class ADPSession:
                 self._tpd_buffer.append(final_msg)
                 if self._caps_outbound_count % self._tpd_promote_every == 0:
                     self._run_tpd_promotion()
+            self._record_history("encode", final_msg, obj, _t0, False)
             return final_msg
 
         full_msg = self._encode_full_with_lut(obj)
@@ -370,6 +389,7 @@ class ADPSession:
             self._tpd_buffer.append(final_msg)
             if self._caps_outbound_count % self._tpd_promote_every == 0:
                 self._run_tpd_promotion()
+        self._record_history("encode", final_msg, obj, _t0, diff_msg is not None)
         return final_msg
 
     def _build_caps_prefix(self) -> str:
@@ -578,6 +598,7 @@ class ADPSession:
         4. Resto del payload — decode normale, aggiorna baseline received
         Espande infine alias dynamic LUT nel risultato.
         """
+        _t0 = time.perf_counter()
         rest = msg
         seen: set[str] = set()
         diff_base_id: str | None = None
@@ -635,7 +656,9 @@ class ADPSession:
             new_payload = apply_diff(self._last_received_payload, diff_dict)
             self._last_received_payload = new_payload
             self._last_received_base_id = self._compute_base_id(new_payload)
-            return self._expand(new_payload)
+            result = self._expand(new_payload)
+            self._record_history("decode", msg, result, _t0, False)
+            return result
 
         if diff_base_id is not None or diff_dict is not None:
             # _base senza _diff o viceversa: errore
@@ -650,6 +673,7 @@ class ADPSession:
         # Aggiorna baseline received
         self._last_received_payload = expanded
         self._last_received_base_id = self._compute_base_id(expanded)
+        self._record_history("decode", msg, expanded, _t0, False)
         return expanded
 
     def _match_reserved_prefix(self, s: str) -> tuple[str, str, int] | None:
@@ -809,6 +833,31 @@ class ADPSession:
             self._pending_announcements[alias] = phrase
         return added
 
+    def _record_history(self, direction: str, adp_msg: str, obj: Any,
+                        t0: float, used_diff: bool = False) -> None:
+        """Append a metrics entry to _history."""
+        elapsed = (time.perf_counter() - t0) * 1000
+        json_str = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        if self._cost_estimator is not None:
+            tokens_adp = self._cost_estimator.estimate(adp_msg)
+            tokens_json = self._cost_estimator.estimate(json_str)
+        else:
+            tokens_adp = max(1, len(adp_msg) // 4)
+            tokens_json = max(1, len(json_str) // 4)
+        self._history.append({
+            "direction": direction,
+            "ts": time.time(),
+            "tokens_adp": tokens_adp,
+            "tokens_json": tokens_json,
+            "bytes_adp": len(adp_msg.encode("utf-8")),
+            "bytes_json": len(json_str.encode("utf-8")),
+            "elapsed_ms": round(elapsed, 3),
+            "lut_entries": len(self._entries),
+            "lut_hits": self._stats["hit_count"],
+            "lut_misses": self._stats["miss_count"],
+            "used_diff": used_diff,
+        })
+
     def stats(self) -> dict:
         """Dict diagnostico."""
         return {
@@ -817,7 +866,18 @@ class ADPSession:
             "hit_count": self._stats["hit_count"],
             "miss_count": self._stats["miss_count"],
             "evictions": self._stats["evictions"],
+            "message_count": len(self._history),
         }
+
+    @property
+    def project(self) -> str | None:
+        """Project name associated with this session, if any."""
+        return self._project
+
+    @property
+    def history(self) -> list[dict]:
+        """Per-message metrics history for dashboard."""
+        return list(self._history)
 
     @property
     def peer_caps(self) -> dict | None:
@@ -832,4 +892,4 @@ class ADPSession:
 
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "ADPDiffSyncError", "DEFAULT_PATH",
-           "SCHEMA_VERSION"]
+           "PROJECTS_DIR", "SCHEMA_VERSION"]

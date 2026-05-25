@@ -95,23 +95,48 @@ Or alternatively the matching slash commands `/adp-encode`,
 
 ```python
 import adp
+import os
 
+# Use ADPSession with auto-detected project name for tracked encoding
+project = os.environ.get("ADP_PROJECT")
+session = adp.ADPSession(project=project) if project else adp.ADPSession(path=None)
+
+# Tracked encode/decode — metrics are saved automatically
+msg = session.encode({"task": "x", "items": [1, 2, 3]})
+obj = session.decode(msg)
+
+# Simple encode/decode (no tracking)
 s = adp.encode({"task": "x", "items": [1, 2, 3]})
-# 'task=x;items=[1i,2,3]'
-
 obj = adp.decode(s)
-# {"task": "x", "items": [1, 2, 3]}
 
 # Converters
 adp.to_json(s)          # canonical JSON
 adp.to_markdown(s)      # human-readable Markdown
 adp.to_html(s)          # standalone HTML
 
+# Dashboard — view token savings per project
+html = adp.render_dashboard(session.history, title="My Project")
+
 # Extensions
 adp.encode(obj, key_lut=adp.DEFAULT_AGENT_LUT)   # +7-14% extra saving
 adp.integrity.sign(s, algo="sha256")              # tamper detection
-adp.tpd.learn_lut(text)                            # phrase compression
 adp.ADPStore(path="shared.json")                   # persistent blob DB
+```
+
+## Automatic tracking
+
+When the `ADP_PROJECT` environment variable is set (auto-detected by the
+SessionStart hook from the project directory name or `.adp-project` file),
+**always use `ADPSession(project=os.environ.get("ADP_PROJECT"))` instead
+of plain `adp.encode()`** for inter-agent communication. This tracks
+per-message token savings, LUT statistics, and encode/decode latency.
+
+View collected metrics with:
+
+```bash
+adp dashboard                          # all projects
+adp dashboard --project <name>         # single project
+adp dashboard --project <name> -o report.html  # save to file
 ```
 
 ## Subagent

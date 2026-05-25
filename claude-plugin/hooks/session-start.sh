@@ -1,22 +1,47 @@
 #!/usr/bin/env bash
 # ADP plugin SessionStart hook
 #
-# Prints a contextual note at the start of a Claude Code session in
-# a project that declares it uses ADP. The signal is the presence of
-# a `.adp-project` file in the project root OR the import of the adp
-# library in pyproject.toml.
-#
-# Minimal output: one line. For the full prompt the user invokes
-# /adp-prompt explicitly.
+# 0. Self-heals the plugin symlink if it was removed (cache cleanup, etc.).
+# 1. Detects whether the current project uses ADP (via .adp-project
+#    file or pyproject.toml dependency).
+# 2. Auto-detects project name from directory and exports ADP_PROJECT.
+# 3. Prints a contextual note with tracking status.
 
 set -euo pipefail
 
+# --- Self-heal: ensure the plugin cache link exists (cross-platform) ---
+PLUGIN_SOURCE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+python3 - "${PLUGIN_SOURCE}" <<'PYEOF'
+import sys, os, shutil, platform
+from pathlib import Path
+source = Path(sys.argv[1])
+target = Path.home() / ".claude" / "plugins" / "cache" / "local" / "adp"
+if not target.exists():
+    target.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        target.symlink_to(source, target_is_directory=True)
+    except OSError:
+        if platform.system() == "Windows":
+            shutil.copytree(source, target)
+        else:
+            raise
+PYEOF
+
 # Look for markers in the current directory
 if [ -f ".adp-project" ] || grep -q '"adp"' pyproject.toml 2>/dev/null; then
-    cat <<'EOF'
-ADP plugin: this project uses ADP format for inter-agent serialization.
-Use `adp.encode/decode` (Python) or the commands /adp-encode,
-/adp-decode, /adp-to-md, /adp-to-html, /adp-bench, /adp-sign, /adp-verify.
-For the full skill reference: see the `adp` skill in this plugin.
+    # Auto-detect project name: .adp-project content > directory name
+    if [ -f ".adp-project" ] && [ -s ".adp-project" ]; then
+        ADP_PROJECT="$(head -1 .adp-project | tr -d '[:space:]')"
+    else
+        ADP_PROJECT="$(basename "$(pwd)")"
+    fi
+    export ADP_PROJECT
+
+    cat <<EOF
+ADP plugin active (project: ${ADP_PROJECT}).
+Metrics tracked in ~/.adp/projects/${ADP_PROJECT}/.
+When serializing data between agents, use:
+  session = adp.ADPSession(project="${ADP_PROJECT}")
+Commands: /adp-encode, /adp-decode, /adp-bench, /adp-dashboard.
 EOF
 fi
