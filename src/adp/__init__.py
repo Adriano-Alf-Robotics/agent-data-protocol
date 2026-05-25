@@ -27,6 +27,7 @@ from adp.integrity import sign, verify, is_signed, IntegrityError
 from adp.session import ADPSession, ADPLUTSyncError, ADPDiffSyncError
 from adp.lut import apply_lut_updates, encode_with_dyn_lut  # noqa: E402
 from adp.cost import TokenizerCostEstimator, estimate_cost
+from adp.dashboard import render_dashboard
 try:
     from adp import image  # noqa: F401
 except ImportError as _img_err:
@@ -63,5 +64,6 @@ __all__ = [
     "encode_with_dyn_lut",
     "TokenizerCostEstimator",
     "estimate_cost",
+    "render_dashboard",
     "__version__",
 ]
