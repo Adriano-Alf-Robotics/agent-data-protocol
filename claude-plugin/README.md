@@ -79,13 +79,23 @@ Or ask Claude Code:
 
 ## Uninstallation
 
+Use the bundled script:
+
 ```bash
-rm ~/.claude/plugins/cache/local/adp        # if symbolic link
-# or
-rm -rf ~/.claude/plugins/cache/adp           # if direct copy
+bash /path/to/GoalLanguageAgents/claude-plugin/uninstall.sh
 ```
 
-Also remove the entry from `~/.claude/plugins/installed_plugins.json`.
+It removes the symlink at `~/.claude/plugins/cache/local/adp` and cleans
+the entry from `~/.claude/plugins/installed_plugins.json` (both v2 nested
+format and legacy top-level if present). Restart Claude Code afterwards.
+
+Manual alternative:
+
+```bash
+rm ~/.claude/plugins/cache/local/adp
+# then edit ~/.claude/plugins/installed_plugins.json
+# remove "adp@local" key from the "plugins" section
+```
 
 ## Updates
 
