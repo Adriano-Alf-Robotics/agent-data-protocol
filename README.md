@@ -264,6 +264,27 @@ uv run adp bench < tests/fixtures/example.json
 
 The core library has no runtime dependencies beyond the standard library.
 
+### Test results
+
+| Module | Tests | Status |
+|---|---:|---|
+| `test_roundtrip.py` | 49 | ✅ |
+| `test_session.py` | 35 | ✅ |
+| `test_diff.py` | 31 | ✅ |
+| `test_v02_features.py` | 26 | ✅ |
+| `test_cost.py` | 15 | ✅ |
+| `test_integrity.py` | 14 | ✅ |
+| `test_tpd_promotion.py` | 14 | ✅ |
+| `test_caps.py` | 13 | ✅ |
+| `test_tpd_db.py` | 12 | ✅ |
+| `test_warmup.py` | 12 | ✅ |
+| `test_lut.py` | 9 | ✅ |
+| `test_image.py` | 9 | ✅ |
+| `test_converters.py` | 5 | ✅ |
+| **Total** | **244** | **✅ all passing** |
+
+*Python 3.11, pytest 9.0, Linux — last run: 2026-05-25.*
+
 ## Roadmap
 
 - **v0.3.5 (current)** — complete `ADPSession`: dynamic LUT HPACK-style, differential encoding, capability negotiation, tokenizer-aware cost, TPD auto-promotion. ~60% fewer tokens vs TOON.
