@@ -82,7 +82,7 @@ struttura universalmente machine-readable.
 uv sync --all-extras
 ```
 
-Requisiti: Python 3.11 o superiore.
+Requisiti: Python 3.11 o superiore. Funziona su Linux, macOS e Windows.
 
 ## Quickstart
 
@@ -1093,6 +1093,23 @@ uv run adp bench < tests/fixtures/example.json
 ```
 
 La libreria core non ha dipendenze runtime oltre alla stdlib.
+
+### Risultati benchmark — risparmio token @ 100 messaggi
+
+`ADPSession` full stack vs JSON-minified e TOON (miglior competitore).
+Tokenizer: `cl100k_base`.
+
+| Workload | JSON | TOON | ADP full | Δ vs JSON | Δ vs TOON |
+|---|---:|---:|---:|---:|---:|
+| status_polling | 7.523 | 8.503 | 3.308 | **−56,0%** | **−61,1%** |
+| tool_use | 4.246 | 4.154 | 3.519 | −17,1% | −15,3% |
+| long_narrative | 7.748 | 7.448 | 7.348 | −5,2% | −1,3% |
+| etl_pipeline | 116.647 | 144.647 | 57.583 | **−50,6%** | **−60,2%** |
+| multi_agent_broadcast | 4.600 | 4.520 | 4.009 | −12,8% | −11,3% |
+| db_query_response | 29.565 | 20.215 | 16.420 | **−44,5%** | −18,8% |
+| mixed | 24.519 | 27.939 | 14.012 | **−42,9%** | **−49,8%** |
+
+Risultati completi su 4 lunghezze di sessione: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Roadmap
 
