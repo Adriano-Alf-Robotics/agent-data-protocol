@@ -81,7 +81,7 @@ pip install -e .
 pip install git+https://github.com/AdrianoDalPastro/agent-data-protocol.git
 ```
 
-Requirements: Python 3.11 or higher.
+Requirements: Python 3.11 or higher. Works on Linux, macOS and Windows.
 
 ## Quickstart
 
