@@ -181,3 +181,104 @@ def test_cli_dashboard_no_history(tmp_path):
     result = runner.invoke(cli_main, ["dashboard", "--path", str(p)])
     assert result.exit_code == 0
     assert "nessun dato" in result.output.lower() or "no data" in result.output.lower()
+
+
+from adp.dashboard import discover_projects, render_multi_dashboard
+
+
+def test_session_project_creates_directory(tmp_path):
+    """ADPSession with explicit path saves to that path."""
+    s = ADPSession(
+        path=str(tmp_path / "projects" / "myapp" / "lut_state.json"),
+        auto_save=False, announce_caps=False,
+    )
+    s.encode({"x": 1})
+    s.save()
+    assert (tmp_path / "projects" / "myapp" / "lut_state.json").exists()
+
+
+def test_session_project_param(tmp_path, monkeypatch):
+    """ADPSession(project='foo') stores under projects dir."""
+    monkeypatch.setattr("adp.session.PROJECTS_DIR", str(tmp_path / "projects"))
+    monkeypatch.setattr("adp.session.DEFAULT_PATH", str(tmp_path / "default.json"))
+    s = ADPSession(project="foo", auto_save=False, announce_caps=False)
+    s.encode({"x": 1})
+    s.save()
+    assert (tmp_path / "projects" / "foo" / "lut_state.json").exists()
+    assert s.project == "foo"
+
+
+def test_discover_projects_finds_projects(tmp_path):
+    """discover_projects finds projects with history."""
+    for name in ["alpha", "beta"]:
+        d = tmp_path / name
+        d.mkdir()
+        s = ADPSession(path=str(d / "lut_state.json"), auto_save=False, announce_caps=False)
+        for i in range(3):
+            s.encode({"project": name, "i": i})
+        s.save()
+
+    projects = discover_projects(str(tmp_path))
+    assert len(projects) == 2
+    names = [p[0] for p in projects]
+    assert "alpha" in names
+    assert "beta" in names
+
+
+def test_discover_projects_empty_dir(tmp_path):
+    """discover_projects returns empty list for empty dir."""
+    assert discover_projects(str(tmp_path)) == []
+
+
+def test_render_multi_dashboard(tmp_path):
+    """render_multi_dashboard shows comparison table + per-project sections."""
+    projects = [
+        ("alpha", _make_history(10)),
+        ("beta", _make_history(5)),
+    ]
+    html = render_multi_dashboard(projects)
+    assert "<!DOCTYPE html>" in html
+    assert "alpha" in html
+    assert "beta" in html
+    assert "Projects overview" in html
+    assert "2 projects" in html
+
+
+def test_render_multi_dashboard_empty():
+    """Empty projects list shows no-data message."""
+    html = render_multi_dashboard([])
+    assert "nessun dato" in html.lower() or "no data" in html.lower()
+
+
+def test_cli_dashboard_discovers_projects(tmp_path, monkeypatch):
+    """CLI without --path discovers projects."""
+    monkeypatch.setattr("adp.session.PROJECTS_DIR", str(tmp_path))
+    monkeypatch.setattr("adp.session.DEFAULT_PATH", str(tmp_path / "nonexistent.json"))
+
+    d = tmp_path / "testproj"
+    d.mkdir()
+    s = ADPSession(path=str(d / "lut_state.json"), auto_save=False, announce_caps=False)
+    s.encode({"a": 1})
+    s.save()
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["dashboard"])
+    assert result.exit_code == 0
+    assert "testproj" in result.output
+
+
+def test_cli_dashboard_project_flag(tmp_path, monkeypatch):
+    """CLI --project filters to one project."""
+    monkeypatch.setattr("adp.session.PROJECTS_DIR", str(tmp_path))
+    monkeypatch.setattr("adp.session.DEFAULT_PATH", str(tmp_path / "nonexistent.json"))
+
+    d = tmp_path / "myapp"
+    d.mkdir()
+    s = ADPSession(path=str(d / "lut_state.json"), auto_save=False, announce_caps=False)
+    s.encode({"task": "hello"})
+    s.save()
+
+    runner = CliRunner()
+    result = runner.invoke(cli_main, ["dashboard", "--project", "myapp"])
+    assert result.exit_code == 0
+    assert "<!DOCTYPE html>" in result.output

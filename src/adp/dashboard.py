@@ -348,6 +348,101 @@ def _render_latency_section(history: list[dict]) -> str:
     )
 
 
+def discover_projects(projects_dir: str | None = None) -> list[tuple[str, list[dict]]]:
+    """Scan the projects directory and return (name, history) for each project."""
+    import json
+    from pathlib import Path
+    base = Path(projects_dir or "~/.adp/projects").expanduser()
+    if not base.is_dir():
+        return []
+    results = []
+    for d in sorted(base.iterdir()):
+        lut_file = d / "lut_state.json"
+        if d.is_dir() and lut_file.exists():
+            try:
+                data = json.loads(lut_file.read_text(encoding="utf-8"))
+                history = data.get("history", [])
+                if history:
+                    results.append((d.name, history))
+            except (json.JSONDecodeError, OSError):
+                continue
+    return results
+
+
+def render_multi_dashboard(
+    projects: list[tuple[str, list[dict]]],
+    title: str = "ADP Dashboard",
+) -> str:
+    """Render a dashboard showing multiple projects."""
+    if not projects:
+        return _render_empty(title)
+
+    # Summary comparison table across projects
+    summary_rows = []
+    for name, history in projects:
+        total_adp = sum(e["tokens_adp"] for e in history)
+        total_json = sum(e["tokens_json"] for e in history)
+        saved = total_json - total_adp
+        pct = (saved / total_json * 100) if total_json > 0 else 0
+        msgs = len(history)
+        summary_rows.append(
+            f'<tr><td><a href="#{_html.escape(name)}">{_html.escape(name)}</a></td>'
+            f'<td>{msgs}</td><td>{total_adp:,}</td><td>{total_json:,}</td>'
+            f'<td>{saved:,}</td><td>{pct:.1f}%</td></tr>'
+        )
+
+    comparison = (
+        f'<div class="dash-section"><h2>Projects overview</h2>'
+        f'<table class="dash-table">'
+        f'<thead><tr><th>Project</th><th>Messages</th><th>ADP tokens</th>'
+        f'<th>JSON tokens</th><th>Saved</th><th>Saving %</th></tr></thead>'
+        f'<tbody>{"".join(summary_rows)}</tbody></table></div>'
+    )
+
+    # Per-project sections
+    sections = []
+    for name, history in projects:
+        section_html = (
+            f'<div id="{_html.escape(name)}" style="margin-top:48px;">'
+            f'<h1 style="font-size:20px;border-bottom:2px solid var(--accent);'
+            f'padding-bottom:8px;margin-bottom:24px;">{_html.escape(name)}</h1>'
+        )
+        total_msgs = len(history)
+        encode_entries = [e for e in history if e["direction"] == "encode"]
+        total_tok_adp = sum(e["tokens_adp"] for e in history)
+        total_tok_json = sum(e["tokens_json"] for e in history)
+        total_saved = total_tok_json - total_tok_adp
+        avg_saving_pct = (total_saved / total_tok_json * 100) if total_tok_json > 0 else 0
+        diff_count = sum(1 for e in encode_entries if e.get("used_diff"))
+        last = history[-1]
+        hit_rate = (
+            last["lut_hits"] / (last["lut_hits"] + last["lut_misses"]) * 100
+            if (last["lut_hits"] + last["lut_misses"]) > 0 else 0
+        )
+        latencies = [e["elapsed_ms"] for e in history if e["elapsed_ms"] > 0]
+        avg_latency = sum(latencies) / len(latencies) if latencies else 0
+
+        section_html += _render_summary_cards(
+            total_msgs, total_saved, avg_saving_pct, hit_rate,
+            last["lut_entries"], diff_count, avg_latency,
+        )
+        section_html += _render_bar_chart(history)
+        section_html += _render_cumulative_chart(history)
+        section_html += _render_cost_table(total_tok_json, total_tok_adp)
+        section_html += '</div>'
+        sections.append(section_html)
+
+    body = (
+        f'<header class="adp-header">'
+        f'<h1>{_html.escape(title)}</h1>'
+        f'<div class="meta">{len(projects)} projects</div>'
+        f'</header>\n'
+        f'{comparison}\n'
+        f'{"".join(sections)}\n'
+    )
+    return _wrap_page(title, body)
+
+
 def _render_lut_section(history: list[dict]) -> str:
     last = history[-1]
     total_lookups = last["lut_hits"] + last["lut_misses"]

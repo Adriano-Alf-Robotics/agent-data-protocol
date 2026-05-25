@@ -83,7 +83,10 @@ class ADPDiffSyncError(Exception):
 
 
 DEFAULT_PATH = "~/.adp/lut_state.json"
+PROJECTS_DIR = "~/.adp/projects"
 SCHEMA_VERSION = 1
+
+_SENTINEL = object()  # marks "path not explicitly provided"
 
 
 class ADPSession:
@@ -96,7 +99,8 @@ class ADPSession:
 
     def __init__(
         self,
-        path: str | Path | None = DEFAULT_PATH,
+        path: str | Path | None = _SENTINEL,  # type: ignore[assignment]
+        project: str | None = None,
         max_entries: int = 256,
         static_lut: dict[str, str] | None = None,
         k_threshold: int = 2,
@@ -110,8 +114,15 @@ class ADPSession:
         tpd_promote_max_per_run: int = 10,
     ) -> None:
         # Path resolution
+        self._project = project
+        # Resolve sentinel: no path given → use DEFAULT_PATH (read from module attr)
+        if path is _SENTINEL:
+            path = DEFAULT_PATH
         if path is None:
             self._path: Path | None = None  # in-memory only
+        elif project is not None and path == DEFAULT_PATH:
+            # Project mode: use projects directory (reads module-level PROJECTS_DIR)
+            self._path = Path(PROJECTS_DIR).expanduser() / project / "lut_state.json"
         elif isinstance(path, str):
             override = os.environ.get("ADP_LUT_PATH")
             chosen = override if override else path
@@ -186,6 +197,7 @@ class ADPSession:
             self._path.rename(backup)
             return
 
+        self._project = data.get("project", self._project)
         self._entries = dict(data.get("entries", {}))
         self._lru_order = list(data.get("lru_order", []))
         self._next_alias_id = int(data.get("next_alias_id", 0))
@@ -199,6 +211,7 @@ class ADPSession:
         self._path.parent.mkdir(parents=True, exist_ok=True)
         data = {
             "version": SCHEMA_VERSION,
+            "project": self._project,
             "entries": dict(self._entries),
             "lru_order": list(self._lru_order),
             "next_alias_id": self._next_alias_id,
@@ -857,6 +870,11 @@ class ADPSession:
         }
 
     @property
+    def project(self) -> str | None:
+        """Project name associated with this session, if any."""
+        return self._project
+
+    @property
     def history(self) -> list[dict]:
         """Per-message metrics history for dashboard."""
         return list(self._history)
@@ -874,4 +892,4 @@ class ADPSession:
 
 
 __all__ = ["ADPSession", "ADPLUTSyncError", "ADPDiffSyncError", "DEFAULT_PATH",
-           "SCHEMA_VERSION"]
+           "PROJECTS_DIR", "SCHEMA_VERSION"]
