@@ -77,3 +77,60 @@ def test_history_in_stats():
     s.encode({"x": 1})
     st = s.stats()
     assert st["message_count"] == 1
+
+
+from adp.dashboard import render_dashboard
+
+
+def _make_history(n: int = 10) -> list[dict]:
+    """Generate synthetic history entries for testing."""
+    history = []
+    for i in range(n):
+        history.append({
+            "direction": "encode" if i % 2 == 0 else "decode",
+            "ts": 1716600000.0 + i * 60,
+            "tokens_adp": 50 + i,
+            "tokens_json": 80 + i,
+            "bytes_adp": 200 + i * 10,
+            "bytes_json": 350 + i * 10,
+            "elapsed_ms": 0.03 + i * 0.001,
+            "lut_entries": min(i, 5),
+            "lut_hits": i * 2,
+            "lut_misses": i,
+            "used_diff": i > 3,
+        })
+    return history
+
+
+def test_render_dashboard_returns_html():
+    """render_dashboard produces a valid HTML document."""
+    html = render_dashboard(_make_history())
+    assert "<!DOCTYPE html>" in html
+    assert "<svg" in html
+    assert "</svg>" in html
+    assert "ADP Dashboard" in html
+
+
+def test_render_dashboard_empty_history():
+    """Empty history produces a page with a 'no data' message."""
+    html = render_dashboard([])
+    assert "<!DOCTYPE html>" in html
+    assert "no data" in html.lower() or "nessun dato" in html.lower()
+
+
+def test_render_dashboard_summary_cards():
+    """Summary section shows total messages and savings."""
+    html = render_dashboard(_make_history(20))
+    assert "20" in html
+
+
+def test_render_dashboard_has_dark_mode():
+    """CSS includes prefers-color-scheme media query."""
+    html = render_dashboard(_make_history())
+    assert "prefers-color-scheme" in html
+
+
+def test_render_dashboard_cost_estimate():
+    """Cost section shows dollar estimates."""
+    html = render_dashboard(_make_history())
+    assert "$" in html
