@@ -1,6 +1,6 @@
 # ADP Plugin for Claude Code
 
-Plugin that integrates **ADP** (Adriano Dal Pastro format) into Claude Code:
+Plugin that integrates **ADP** (Agent Data Protocol) into Claude Code:
 skill, slash commands, dedicated subagent, contextual hook.
 
 ADP is a lossless, token-efficient text serialization format for
@@ -24,12 +24,12 @@ The `adp` CLI must be installed and reachable. Two options:
 
 ```bash
 # Option A: within the same repo
-cd /path/to/GoalLanguageAgents
+cd /path/to/agent-data-protocol
 uv sync --all-extras
-# commands will use: uv run --directory /path/to/GoalLanguageAgents adp ...
+# commands will use: uv run --directory /path/to/agent-data-protocol adp ...
 
 # Option B: global via pip / pipx
-pipx install /path/to/GoalLanguageAgents
+pipx install /path/to/agent-data-protocol
 # commands will use: adp ...
 ```
 
@@ -39,7 +39,7 @@ pipx install /path/to/GoalLanguageAgents
 
 ```bash
 mkdir -p ~/.claude/plugins/cache/local
-ln -sf /path/to/GoalLanguageAgents/claude-plugin \
+ln -sf /path/to/agent-data-protocol/claude-plugin \
        ~/.claude/plugins/cache/local/adp
 ```
 
@@ -55,14 +55,14 @@ Edit `~/.claude/plugins/installed_plugins.json` by adding:
 
 ```bash
 mkdir -p ~/.claude/plugins/cache/adp/0.3.5
-cp -r /path/to/GoalLanguageAgents/claude-plugin/* \
+cp -r /path/to/agent-data-protocol/claude-plugin/* \
       ~/.claude/plugins/cache/adp/0.3.5/
 ```
 
 ### Method 3 — automated script
 
 ```bash
-bash /path/to/GoalLanguageAgents/claude-plugin/install.sh
+bash /path/to/agent-data-protocol/claude-plugin/install.sh
 ```
 
 ## Verification
@@ -82,7 +82,7 @@ Or ask Claude Code:
 Use the bundled script:
 
 ```bash
-bash /path/to/GoalLanguageAgents/claude-plugin/uninstall.sh
+bash /path/to/agent-data-protocol/claude-plugin/uninstall.sh
 ```
 
 It removes the symlink at `~/.claude/plugins/cache/local/adp` and cleans

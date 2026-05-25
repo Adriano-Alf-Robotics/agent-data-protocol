@@ -1,4 +1,4 @@
-# ADP — Adriano Dal Pastro format
+# ADP — Agent Data Protocol
 ## Relazione tecnica completa
 
 > Documento consolidato della sessione di analisi e sviluppo del 22-05-2026.
@@ -526,7 +526,7 @@ Registrazione in `~/.claude/.mcp.json`:
   "mcpServers": {
     "adp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/GoalLanguageAgents",
+      "args": ["run", "--directory", "/path/to/agent-data-protocol",
                "python", "mcp-adp/server.py"]
     }
   }
@@ -752,7 +752,7 @@ In dieci righe:
 
 ## Appendice: riferimenti rapidi
 
-- Repository: `/home/adriano/Documenti/Git_XYZ/GoalLanguageAgents`
+- Repository: `/home/adriano/Documenti/Git_XYZ/agent-data-protocol`
 - Spec design: `docs/superpowers/specs/2026-05-22-adp-design.md`
 - Report benchmark dettagliato: `benchmarks/results.md` (circa
   centodieci kilobyte, comprende esempi codificati in tutti i

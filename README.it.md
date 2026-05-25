@@ -1,4 +1,4 @@
-# ADP — Adriano Dal Pastro format
+# ADP — Agent Data Protocol
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Python ≥3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
@@ -799,7 +799,7 @@ con skill, subagent `adp-agent`, nove slash command, hook contestuale e
 script di installazione. Setup in una riga:
 
 ```bash
-bash /path/to/GoalLanguageAgents/claude-plugin/install.sh
+bash /path/to/agent-data-protocol/claude-plugin/install.sh
 # Riavvia Claude Code: /adp-encode, /adp-decode, /adp-bench, ... attivi
 ```
 
@@ -835,7 +835,7 @@ description: Encode/decode/bench ADP da stdin
 argument-hint: <encode|decode|to-md|to-html|sign|verify|bench> [opts]
 ---
 
-Esegui `uv run --directory /path/to/GoalLanguageAgents adp $ARGUMENTS`.
+Esegui `uv run --directory /path/to/agent-data-protocol adp $ARGUMENTS`.
 ```
 
 In sessione: `/adp encode < input.json`, `/adp serve --port 8000`, ecc.
@@ -879,7 +879,7 @@ Registra in `~/.claude/.mcp.json`:
   "mcpServers": {
     "adp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/GoalLanguageAgents",
+      "args": ["run", "--directory", "/path/to/agent-data-protocol",
                "python", "mcp-adp/server.py"]
     }
   }
@@ -900,7 +900,7 @@ In `~/.claude/settings.json`:
       "matcher": "",
       "hooks": [{
         "type": "command",
-        "command": "uv run --directory /path/to/GoalLanguageAgents adp prompt"
+        "command": "uv run --directory /path/to/agent-data-protocol adp prompt"
       }]
     }]
   }
@@ -1045,7 +1045,7 @@ usare HMAC con chiave condivisa fuori-canale.
 ## Struttura del progetto
 
 ```
-GoalLanguageAgents/
+agent-data-protocol/
 ├── src/adp/
 │   ├── __init__.py        API pubblica
 │   ├── parser.py          ADP → Python (recursive-descent, zero deps)

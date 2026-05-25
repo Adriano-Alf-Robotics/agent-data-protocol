@@ -46,7 +46,7 @@ skills, an `adp-agent` subagent, nine slash commands, a contextual hook, and
 an installation script. One-line setup:
 
 ```bash
-bash /path/to/GoalLanguageAgents/claude-plugin/install.sh
+bash /path/to/agent-data-protocol/claude-plugin/install.sh
 # Riavvia Claude Code: /adp-encode, /adp-decode, /adp-bench, ... attivi
 ```
 
@@ -84,7 +84,7 @@ description: Encode/decode/bench ADP da stdin
 argument-hint: <encode|decode|to-md|to-html|sign|verify|bench> [opts]
 ---
 
-Esegui `uv run --directory /path/to/GoalLanguageAgents adp $ARGUMENTS`.
+Esegui `uv run --directory /path/to/agent-data-protocol adp $ARGUMENTS`.
 ```
 
 In session: `/adp encode < input.json`, `/adp serve --port 8000`, etc.
@@ -128,7 +128,7 @@ Register in `~/.claude/.mcp.json`:
   "mcpServers": {
     "adp": {
       "command": "uv",
-      "args": ["run", "--directory", "/path/to/GoalLanguageAgents",
+      "args": ["run", "--directory", "/path/to/agent-data-protocol",
                "python", "mcp-adp/server.py"]
     }
   }
@@ -149,7 +149,7 @@ In `~/.claude/settings.json`:
       "matcher": "",
       "hooks": [{
         "type": "command",
-        "command": "uv run --directory /path/to/GoalLanguageAgents adp prompt"
+        "command": "uv run --directory /path/to/agent-data-protocol adp prompt"
       }]
     }]
   }

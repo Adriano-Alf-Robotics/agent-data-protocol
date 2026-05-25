@@ -1,4 +1,4 @@
-"""ADP — Adriano Dal Pastro format.
+"""ADP — Agent Data Protocol.
 
 Token-efficient lossless serialization format for AI agent communication.
 Supports nested structures, bytes, tables with nested cells, and aggressive

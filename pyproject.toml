@@ -1,7 +1,7 @@
 [project]
 name = "adp"
 version = "0.3.5"
-description = "ADP — Adriano Dal Pastro format. Token-efficient lossless serialization for AI agent communication"
+description = "ADP — Agent Data Protocol. Token-efficient lossless serialization for AI agent communication"
 authors = [{name = "Adriano Dal Pastro", email = "adrianodalpastro@tielogic.com"}]
 requires-python = ">=3.11"
 readme = "README.md"
@@ -40,8 +40,8 @@ tokenizer = [
 adp = "adp.cli:main"
 
 [project.urls]
-Homepage = "https://github.com/adrianodalpastro/GoalLanguageAgents"
-Repository = "https://github.com/adrianodalpastro/GoalLanguageAgents"
+Homepage = "https://github.com/adrianodalpastro/agent-data-protocol"
+Repository = "https://github.com/adrianodalpastro/agent-data-protocol"
 
 [build-system]
 requires = ["hatchling"]

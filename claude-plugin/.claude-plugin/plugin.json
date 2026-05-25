@@ -1,12 +1,12 @@
 {
   "name": "adp",
   "version": "0.3.5",
-  "description": "ADP — Adriano Dal Pastro format. Token-efficient lossless serialization for AI agents. Skill + slash commands + subagent + permission allowlist.",
+  "description": "ADP — Agent Data Protocol. Token-efficient lossless serialization for AI agents. Skill + slash commands + subagent + permission allowlist.",
   "author": {
     "name": "Adriano Dal Pastro",
     "email": "adrianodalpastro@tielogic.com"
   },
-  "repository": "https://github.com/adrianodalpastro/GoalLanguageAgents",
+  "repository": "https://github.com/adrianodalpastro/agent-data-protocol",
   "license": "MIT",
   "keywords": [
     "serialization",

@@ -17,7 +17,7 @@ adp_out=$(printf '%s' "$input" | jq -r '.tool_response.stdout // .tool_response.
 [[ -z "$adp_out" ]] && exit 0
 
 ADP_BIN="${ADP_BIN:-adp}"
-command -v "$ADP_BIN" >/dev/null 2>&1 || ADP_BIN="/home/adriano/Documenti/Git_XYZ/GoalLanguageAgents/.venv/bin/adp"
+command -v "$ADP_BIN" >/dev/null 2>&1 || ADP_BIN="/home/adriano/Documenti/Git_XYZ/agent-data-protocol/.venv/bin/adp"
 
 bench=$(printf '%s' "$adp_out" | "$ADP_BIN" decode 2>/dev/null | "$ADP_BIN" bench 2>/dev/null) || exit 0
 

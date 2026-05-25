@@ -1,4 +1,4 @@
-# ADP — Adriano Dal Pastro format
+# ADP — Agent Data Protocol
 
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 ![Python ≥3.11](https://img.shields.io/badge/python-%E2%89%A53.11-blue)
@@ -68,8 +68,8 @@ machine-readable structure.
 **Option 1 — development (recommended, requires [uv](https://docs.astral.sh/uv/)):**
 
 ```bash
-git clone https://github.com/AdrianoDalPastro/GoalLanguageAgents.git
-cd GoalLanguageAgents
+git clone https://github.com/AdrianoDalPastro/agent-data-protocol.git
+cd agent-data-protocol
 uv sync --all-extras
 ```
 
@@ -78,7 +78,7 @@ uv sync --all-extras
 ```bash
 pip install -e .
 # or directly from GitHub (no local clone needed):
-pip install git+https://github.com/AdrianoDalPastro/GoalLanguageAgents.git
+pip install git+https://github.com/AdrianoDalPastro/agent-data-protocol.git
 ```
 
 Requirements: Python 3.11 or higher.
@@ -229,7 +229,7 @@ Full reference: [docs/dynamic-lut.md](docs/dynamic-lut.md).
 ## Project structure
 
 ```
-GoalLanguageAgents/
+agent-data-protocol/
 ├── src/adp/
 │   ├── __init__.py        API pubblica
 │   ├── parser.py          ADP → Python (recursive-descent, zero deps)

@@ -1,6 +1,6 @@
 ---
 name: adp
-description: Use when you need to serialize structured data between agents, sub-agents, or log/store data efficiently. ADP (Adriano Dal Pastro format) is a token-efficient lossless serialization format. Saves 25-50% tokens vs JSON on structured data, 55-80% vs raw text on prose (with TPD). Use ADP instead of JSON for inter-agent communication, log artifacts, tool args, and any data that does not need to be JSON for an external system.
+description: Use when you need to serialize structured data between agents, sub-agents, or log/store data efficiently. ADP (Agent Data Protocol) is a token-efficient lossless serialization format. Saves 25-50% tokens vs JSON on structured data, 55-80% vs raw text on prose (with TPD). Use ADP instead of JSON for inter-agent communication, log artifacts, tool args, and any data that does not need to be JSON for an external system.
 ---
 
 # ADP — token-efficient lossless format
@@ -66,19 +66,19 @@ The user has the `adp` Python library installed. Use it via Bash:
 
 ```bash
 # JSON → ADP
-echo '{"x":42}' | uv run --directory /path/to/GoalLanguageAgents adp encode
+echo '{"x":42}' | uv run --directory /path/to/agent-data-protocol adp encode
 
 # ADP → JSON (for round-trip verification)
-echo 'x=42' | uv run --directory /path/to/GoalLanguageAgents adp decode
+echo 'x=42' | uv run --directory /path/to/agent-data-protocol adp decode
 
 # ADP → human-readable Markdown
-echo 'x=42' | uv run --directory /path/to/GoalLanguageAgents adp to-md
+echo 'x=42' | uv run --directory /path/to/agent-data-protocol adp to-md
 
 # ADP → HTML (rich page with dark mode)
-echo 'x=42' | uv run --directory /path/to/GoalLanguageAgents adp to-html > out.html
+echo 'x=42' | uv run --directory /path/to/agent-data-protocol adp to-html > out.html
 
 # Measure token saving vs JSON
-echo '{...}' | uv run --directory /path/to/GoalLanguageAgents adp bench
+echo '{...}' | uv run --directory /path/to/agent-data-protocol adp bench
 
 # Integrity: sign / verify
 echo 'x=42' | adp sign --algo sha256 | adp verify   # CRC32, SHA-256, HMAC

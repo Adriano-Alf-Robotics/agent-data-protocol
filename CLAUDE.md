@@ -1,4 +1,4 @@
-# Project CLAUDE.md — ADP (Adriano Dal Pastro format)
+# Project CLAUDE.md — ADP (Agent Data Protocol)
 
 Token-efficient lossless serialization library for LLM agent-to-agent
 communication. Python 3.11+, zero runtime deps in core. Version: **0.3.5**.
