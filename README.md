@@ -33,11 +33,12 @@ See [docs/dynamic-lut.md](docs/dynamic-lut.md) and [docs/benchmarks.md](docs/ben
 5. [Syntax cheat sheet](#syntax-cheat-sheet)
 6. [Converters](#converters)
 7. [AI agent integration](#ai-agent-integration)
-8. [Project structure](#project-structure)
-9. [Development and testing](#development-and-testing)
-10. [Roadmap](#roadmap)
-11. [Documentation](#documentation)
-12. [License](#license)
+8. [Dashboard](#dashboard)
+9. [Project structure](#project-structure)
+10. [Development and testing](#development-and-testing)
+11. [Roadmap](#roadmap)
+12. [Documentation](#documentation)
+13. [License](#license)
 
 ---
 
@@ -226,6 +227,64 @@ obj = session.decode(msg)
 Full reference: [docs/dynamic-lut.md](docs/dynamic-lut.md).
 
 > **Note:** dynamic LUT aliases use the reserved `_N` pattern (underscore + digits). Payload keys or values matching `_\d+` (e.g. `{"_0": "literal"}`) will raise `ADPLUTSyncError` on decode.
+
+## Dashboard
+
+ADP includes a built-in dashboard that generates a standalone HTML page
+with interactive SVG charts showing token savings, LUT statistics,
+encode/decode latency, and cost estimates per LLM provider.
+
+### Per-project sessions
+
+`ADPSession` supports per-project tracking. Pass a `project` name and
+metrics are stored separately under `~/.adp/projects/<name>/`:
+
+```python
+session = adp.ADPSession(project="my-api")
+msg = session.encode({"task": "deploy", "version": "2.1.0"})
+# Metrics saved to ~/.adp/projects/my-api/lut_state.json
+```
+
+### Generate a dashboard
+
+From the command line:
+
+```bash
+# All projects at once (discovers ~/.adp/projects/*)
+uv run adp dashboard -o dashboard.html
+
+# Single project
+uv run adp dashboard --project my-api -o dashboard.html
+
+# From a specific session file
+uv run adp dashboard --path ./custom_lut.json -o dashboard.html
+```
+
+Or from Python:
+
+```python
+import adp
+from pathlib import Path
+
+session = adp.ADPSession(project="my-api")
+# ... encode/decode messages ...
+html = adp.render_dashboard(session.history, title="My API savings")
+Path("dashboard.html").write_text(html)
+```
+
+The generated page includes:
+
+- **Summary cards** — total messages, tokens saved, average saving %, LUT hit rate
+- **Bar chart** — per-message token comparison (ADP vs JSON)
+- **Cumulative savings** — running total of tokens saved over time
+- **Cost estimates** — savings in $ per LLM provider (Claude, GPT-4o, etc.)
+- **Latency table** — encode/decode avg/min/max in milliseconds
+- **LUT gauge** — hit rate visualization with entry statistics
+
+Multi-project mode adds a comparison table across all discovered projects
+with per-project drill-down sections.
+
+No external dependencies. Auto dark mode. Works in any browser.
 
 ## Project structure
 

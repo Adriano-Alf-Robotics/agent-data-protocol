@@ -43,10 +43,11 @@ L'ultima riga è ottenuta con `ADPSession` (dynamic LUT HPACK-style + differenti
 10. [Immagini](#immagini)
 11. [Usare ADP in Claude Code](#usare-adp-in-claude-code)
 12. [Integrità — sign / verify](#integrità--sign--verify)
-13. [Struttura del progetto](#struttura-del-progetto)
-14. [Sviluppo e test](#sviluppo-e-test)
-15. [Roadmap](#roadmap)
-16. [Licenza](#licenza)
+13. [Dashboard](#dashboard)
+14. [Struttura del progetto](#struttura-del-progetto)
+15. [Sviluppo e test](#sviluppo-e-test)
+16. [Roadmap](#roadmap)
+17. [Licenza](#licenza)
 
 ---
 
@@ -1042,6 +1043,66 @@ usare HMAC con chiave condivisa fuori-canale.
 | Coda di messaggi (Redis, RabbitMQ) | no | sì (CRC32 o SHA-256) |
 | **LLM in mezzo** (agent → LLM → agent) | **NO** | **sì, SHA-256 o HMAC** |
 | Storage long-term (audit log) | no | sì (SHA-256 per bit-rot) |
+
+## Dashboard
+
+ADP include un dashboard integrato che genera una pagina HTML standalone
+con grafici SVG interattivi, mostrando il risparmio di token, le
+statistiche LUT, la latenza di encode/decode e le stime di costo per
+provider LLM.
+
+### Sessioni per progetto
+
+`ADPSession` supporta il tracciamento per progetto. Passando un nome
+`project`, le metriche vengono salvate separatamente in
+`~/.adp/projects/<nome>/`:
+
+```python
+session = adp.ADPSession(project="my-api")
+msg = session.encode({"task": "deploy", "version": "2.1.0"})
+# Metriche salvate in ~/.adp/projects/my-api/lut_state.json
+```
+
+### Generare un dashboard
+
+Da riga di comando:
+
+```bash
+# Tutti i progetti (scopre ~/.adp/projects/*)
+uv run adp dashboard -o dashboard.html
+
+# Singolo progetto
+uv run adp dashboard --project my-api -o dashboard.html
+
+# Da un file di sessione specifico
+uv run adp dashboard --path ./custom_lut.json -o dashboard.html
+```
+
+Oppure da Python:
+
+```python
+import adp
+from pathlib import Path
+
+session = adp.ADPSession(project="my-api")
+# ... encode/decode messaggi ...
+html = adp.render_dashboard(session.history, title="Risparmio My API")
+Path("dashboard.html").write_text(html)
+```
+
+La pagina generata include:
+
+- **Card riassuntive** — messaggi totali, token risparmiati, saving medio %, hit rate LUT
+- **Grafico a barre** — confronto token per messaggio (ADP vs JSON)
+- **Risparmio cumulativo** — totale token risparmiati nel tempo
+- **Stime di costo** — risparmio in $ per provider LLM (Claude, GPT-4o, ecc.)
+- **Tabella latenza** — encode/decode avg/min/max in millisecondi
+- **Gauge LUT** — visualizzazione hit rate con statistiche entry
+
+La modalità multi-progetto aggiunge una tabella comparativa tra tutti i
+progetti scoperti, con sezioni di dettaglio per ciascuno.
+
+Nessuna dipendenza esterna. Dark mode automatico. Funziona in qualsiasi browser.
 
 ## Struttura del progetto
 
