@@ -108,8 +108,9 @@ Top result @ 100 msg agent conversation:
    `static_lut=DEFAULT_AGENT_LUT` to `ADPSession` for generic
    user-defined payloads — the LUT is tuned for inter-agent vocabulary.
 
-4. **Windows not supported**: `session.py` uses `fcntl.flock` (POSIX
-   only). macOS and Linux fine. Not documented in README yet.
+4. **Windows file locking is best-effort**: `session.py` uses a no-op
+   stub when `fcntl` is unavailable (Windows). Persistence works, but
+   concurrent processes may race on `lut_state.json`.
 
 ## Plugin (`claude-plugin/`)
 

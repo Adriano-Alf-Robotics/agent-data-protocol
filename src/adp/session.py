@@ -44,7 +44,11 @@ Spec: docs/superpowers/specs/2026-05-24-dynamic-lut-design.md
 from __future__ import annotations
 
 import atexit
-import fcntl
+try:
+    from fcntl import flock, LOCK_SH, LOCK_EX, LOCK_UN
+except ImportError:
+    LOCK_SH = LOCK_EX = LOCK_UN = 0
+    def flock(fd, operation): pass  # type: ignore[misc]
 import json
 import os
 import re
@@ -167,11 +171,11 @@ class ADPSession:
     def _load(self) -> None:
         assert self._path is not None
         with self._path.open("r", encoding="utf-8") as f:
-            fcntl.flock(f.fileno(), fcntl.LOCK_SH)
+            flock(f.fileno(), LOCK_SH)
             try:
                 data = json.load(f)
             finally:
-                fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                flock(f.fileno(), LOCK_UN)
 
         version = data.get("version", 1)
         if version != SCHEMA_VERSION:
@@ -204,13 +208,13 @@ class ADPSession:
         tmp_path = Path(tmp_path_str)
         try:
             with os.fdopen(fd, "w", encoding="utf-8") as f:
-                fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+                flock(f.fileno(), LOCK_EX)
                 try:
                     json.dump(data, f, ensure_ascii=False, indent=2)
                     f.flush()
                     os.fsync(f.fileno())
                 finally:
-                    fcntl.flock(f.fileno(), fcntl.LOCK_UN)
+                    flock(f.fileno(), LOCK_UN)
             os.replace(tmp_path, self._path)
         except Exception:
             if tmp_path.exists():
