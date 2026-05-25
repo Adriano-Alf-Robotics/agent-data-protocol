@@ -1,0 +1,22 @@
+{
+  "name": "adp",
+  "description": "ADP (Agent Data Protocol) — token-efficient lossless serialization for AI agent communication. Slash commands, subagent, skills, SessionStart hook, and dashboard.",
+  "owner": {
+    "name": "Adriano Dal Pastro",
+    "email": "adrianodalpastro@tielogic.com"
+  },
+  "plugins": [
+    {
+      "name": "adp",
+      "description": "Token-efficient lossless serialization for AI agents. 25-50% token savings vs JSON on structured data, 55-80% on prose. Dynamic LUT, differential encoding, capability negotiation, tokenizer-aware cost estimation, and TPD promotion.",
+      "version": "0.3.5",
+      "source": "./",
+      "author": {
+        "name": "Adriano Dal Pastro",
+        "email": "adrianodalpastro@tielogic.com"
+      },
+      "category": "development",
+      "homepage": "https://github.com/Adriano-Alf-Robotics/agent-data-protocol"
+    }
+  ]
+}
