@@ -1,6 +1,6 @@
 ---
 description: Generate ADP token savings dashboard
-argument-hint: [--project <name>] [--output <file>]
+argument-hint: "[--project <name>] [--output <file>]"
 ---
 
 Run `uv run --directory /home/adriano/Documenti/Git_XYZ/agent-data-protocol adp dashboard $ARGUMENTS`.

@@ -1,6 +1,6 @@
 ---
 description: Convert ADP to JSON (lossless round-trip)
-argument-hint: [file.adp]
+argument-hint: "[file.adp]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read
 disable-model-invocation: false
 ---

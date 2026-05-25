@@ -28,3 +28,11 @@ Thumbs.db
 # Local env
 .env
 !.env.example
+
+# Plugin marker files (created by install.py)
+claude-plugin/.cli-installed
+claude-plugin/.install-version
+claude-plugin/.in_use/
+
+# ADP local project marker
+.adp-project

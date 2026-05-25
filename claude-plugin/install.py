@@ -2,8 +2,12 @@
 """Cross-platform installer for the ADP Claude Code plugin.
 
 Creates a symlink (preferred) or directory copy (fallback on Windows
-without developer mode) at ~/.claude/plugins/cache/local/adp and
-registers the plugin in installed_plugins.json.
+without developer mode) at ~/.claude/plugins/cache/adp/agent-data-protocol/<version>/
+and registers the plugin in installed_plugins.json.
+
+Uses the same namespace/version/marker-file convention as official
+plugins (claude-mem, superpowers, etc.) so that Claude Code's cache
+management does not prune the entry.
 """
 
 import json
@@ -15,13 +19,34 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 PLUGIN_NAME = "adp"
+PLUGIN_SLUG = "agent-data-protocol"
 PLUGIN_VERSION = "0.3.5"
+REGISTRY_KEY = f"{PLUGIN_NAME}@{PLUGIN_NAME}"
 
 PLUGIN_DIR = Path(__file__).resolve().parent
 CLAUDE_PLUGINS = Path.home() / ".claude" / "plugins"
-CACHE_LOCAL = CLAUDE_PLUGINS / "cache" / "local"
-TARGET = CACHE_LOCAL / PLUGIN_NAME
+CACHE_NS = CLAUDE_PLUGINS / "cache" / PLUGIN_NAME / PLUGIN_SLUG / PLUGIN_VERSION
 INSTALLED_JSON = CLAUDE_PLUGINS / "installed_plugins.json"
+
+LEGACY_TARGET = CLAUDE_PLUGINS / "cache" / "local" / PLUGIN_NAME
+LEGACY_KEY = f"{PLUGIN_NAME}@local"
+
+
+def _remove_legacy() -> None:
+    """Remove old cache/local/adp symlink and registry key if present."""
+    if LEGACY_TARGET.is_symlink() or LEGACY_TARGET.exists():
+        if LEGACY_TARGET.is_symlink() or LEGACY_TARGET.is_file():
+            LEGACY_TARGET.unlink()
+        else:
+            shutil.rmtree(LEGACY_TARGET)
+        print(f"Removed legacy install: {LEGACY_TARGET}")
+
+    if INSTALLED_JSON.exists():
+        data = json.loads(INSTALLED_JSON.read_text())
+        if LEGACY_KEY in data.get("plugins", {}):
+            del data["plugins"][LEGACY_KEY]
+            INSTALLED_JSON.write_text(json.dumps(data, indent=2) + "\n")
+            print(f"Removed legacy registry key: {LEGACY_KEY}")
 
 
 def create_link(source: Path, dest: Path) -> str:
@@ -43,11 +68,28 @@ def create_link(source: Path, dest: Path) -> str:
         raise
 
 
+def write_markers(dest: Path) -> None:
+    """Write .cli-installed and .install-version marker files."""
+    now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
+
+    cli_installed = dest / ".cli-installed"
+    cli_installed.write_text(now_iso)
+
+    install_version = dest / ".install-version"
+    install_version.write_text(json.dumps({
+        "version": PLUGIN_VERSION,
+        "installedAt": now_iso,
+    }))
+
+    in_use = dest / ".in_use"
+    in_use.mkdir(exist_ok=True)
+
+
 def update_registry() -> None:
     now_iso = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z"
     entry = {
         "scope": "user",
-        "installPath": str(TARGET),
+        "installPath": str(CACHE_NS),
         "version": PLUGIN_VERSION,
         "installedAt": now_iso,
         "lastUpdated": now_iso,
@@ -60,7 +102,7 @@ def update_registry() -> None:
     else:
         data = {"version": 2, "plugins": {}}
 
-    data["plugins"][f"{PLUGIN_NAME}@local"] = [entry]
+    data["plugins"][REGISTRY_KEY] = [entry]
     INSTALLED_JSON.write_text(json.dumps(data, indent=2) + "\n")
     print(f"Updated {INSTALLED_JSON}")
 
@@ -75,11 +117,14 @@ def main() -> int:
         print(f"Error: {plugin_json} not found.", file=sys.stderr)
         return 1
 
-    CACHE_LOCAL.mkdir(parents=True, exist_ok=True)
+    _remove_legacy()
 
-    method = create_link(PLUGIN_DIR, TARGET)
-    print(f"Installed ({method}): {TARGET} -> {PLUGIN_DIR}")
+    CACHE_NS.mkdir(parents=True, exist_ok=True)
 
+    method = create_link(PLUGIN_DIR, CACHE_NS)
+    print(f"Installed ({method}): {CACHE_NS} -> {PLUGIN_DIR}")
+
+    write_markers(PLUGIN_DIR)
     update_registry()
 
     print(f"\nADP plugin v{PLUGIN_VERSION} installed. Restart Claude Code to activate.")

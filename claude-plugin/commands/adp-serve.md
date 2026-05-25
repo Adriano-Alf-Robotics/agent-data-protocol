@@ -1,6 +1,6 @@
 ---
 description: Start a live HTML viewer (append-only, SSE) for streaming ADP records
-argument-hint: [--port 8000] [--host 127.0.0.1] [--title "..."]
+argument-hint: '[--port 8000] [--host 127.0.0.1] [--title "..."]'
 allowed-tools: Bash(adp:*), Bash(uv run adp:*)
 disable-model-invocation: false
 ---

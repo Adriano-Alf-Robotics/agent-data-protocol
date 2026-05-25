@@ -1,6 +1,6 @@
 ---
 description: Measure token saving of ADP vs JSON on a given payload
-argument-hint: [file.json] [--tokenizer cl100k_base|o200k_base]
+argument-hint: "[file.json] [--tokenizer cl100k_base|o200k_base]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read
 disable-model-invocation: false
 ---

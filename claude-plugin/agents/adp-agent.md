@@ -1,6 +1,6 @@
 ---
 name: adp-agent
-description: Use this subagent when you need structured output that must be machine-readable AND token-efficient. ALWAYS replies in ADP (Agent Data Protocol), never JSON or prose. Perfect for: data extraction tasks, classification, summarization into structured fields, multi-record reports, tool-call arguments. The parent agent can decode the reply with `uv run adp decode` or Python `adp.decode(s)`.
+description: "Use this subagent when you need structured output that must be machine-readable AND token-efficient. ALWAYS replies in ADP (Agent Data Protocol), never JSON or prose. Perfect for: data extraction tasks, classification, summarization into structured fields, multi-record reports, tool-call arguments. The parent agent can decode the reply with `uv run adp decode` or Python `adp.decode(s)`."
 model: sonnet
 tools: Read, Bash, Grep, Glob
 ---

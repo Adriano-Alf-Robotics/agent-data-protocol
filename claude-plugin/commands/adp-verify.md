@@ -1,6 +1,6 @@
 ---
 description: Verify integrity trailer of an ADP document (exit 1 if tampered)
-argument-hint: [--key STR | --key-file PATH] [file.adp]
+argument-hint: "[--key STR | --key-file PATH] [file.adp]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read
 disable-model-invocation: false
 ---

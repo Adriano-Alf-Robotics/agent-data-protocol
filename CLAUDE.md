@@ -115,17 +115,22 @@ Top result @ 100 msg agent conversation:
 
 ## Plugin (`claude-plugin/`)
 
-Full Claude Code integration: skill `adp`, subagent `adp-agent`, 9
+Full Claude Code integration: skill `adp`, subagent `adp-agent`, 10
 slash commands (`/adp-encode`, `/adp-decode`, `/adp-to-md`,
 `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`,
-`/adp-serve`, `/adp-prompt`), SessionStart hook.
+`/adp-serve`, `/adp-prompt`, `/adp-dashboard`), SessionStart hook.
 
-- Install: `bash claude-plugin/install.sh`
-- Uninstall: `bash claude-plugin/uninstall.sh`
+- Install: `python3 claude-plugin/install.py` (or `bash claude-plugin/install.sh`)
+- Uninstall: `python3 claude-plugin/uninstall.py` (or `bash claude-plugin/uninstall.sh`)
 
 Both scripts are idempotent and write to
 `~/.claude/plugins/installed_plugins.json` using the CC v2 nested
-format. Plugin currently **installed globally** as `adp@local v0.3.5`.
+format. Plugin currently **installed globally** as `adp@adp v0.3.5`.
+
+SessionStart hook auto-detects ADP projects (via `.adp-project` file
+or `pyproject.toml` dependency) and auto-initializes the session file
+(`lut_state.json`) — no fake/demo data is generated, only the empty
+structure ready for real metrics.
 
 ## When working in this repo
 

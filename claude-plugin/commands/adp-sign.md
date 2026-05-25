@@ -1,6 +1,6 @@
 ---
 description: Append integrity trailer (CRC32 / SHA-256 / HMAC) to an ADP document
-argument-hint: [--algo crc32|sha256|hmac] [--key STR | --key-file PATH] [file.adp]
+argument-hint: "[--algo crc32|sha256|hmac] [--key STR | --key-file PATH] [file.adp]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read
 disable-model-invocation: false
 ---

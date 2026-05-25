@@ -1,6 +1,6 @@
 ---
 description: Print the ADP system prompt for instructing an LLM agent
-argument-hint: [--few-shot]
+argument-hint: "[--few-shot]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*)
 disable-model-invocation: false
 ---

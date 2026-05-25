@@ -1,6 +1,6 @@
 ---
 description: Convert JSON to ADP (token-efficient lossless format)
-argument-hint: [file.json | --from-clipboard]
+argument-hint: "[file.json | --from-clipboard]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read
 disable-model-invocation: false
 ---

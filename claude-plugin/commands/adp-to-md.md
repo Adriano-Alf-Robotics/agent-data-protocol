@@ -1,6 +1,6 @@
 ---
 description: Render an ADP document as human-readable Markdown
-argument-hint: [file.adp]
+argument-hint: "[file.adp]"
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read
 disable-model-invocation: false
 ---

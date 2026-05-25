@@ -1,6 +1,6 @@
 ---
 description: Render an ADP document as a standalone HTML5 page (rich CSS, auto dark mode)
-argument-hint: [file.adp] [--out path.html] [--title "..."]
+argument-hint: '[file.adp] [--out path.html] [--title "..."]'
 allowed-tools: Bash(adp:*), Bash(uv run adp:*), Read, Write
 disable-model-invocation: false
 ---

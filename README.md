@@ -266,7 +266,7 @@ python3 claude-plugin/uninstall.py
 | **Slash commands** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt`, `/adp-dashboard` |
 | **Subagent** | `adp-agent` — responds in ADP format, useful for structured extractions |
 | **Skill** | `adp` — teaches Claude when and how to use ADP in agent communication |
-| **SessionStart hook** | Auto-detects ADP projects (via `.adp-project` file or `pyproject.toml` dependency), exports `ADP_PROJECT` env var, enables per-project metrics |
+| **SessionStart hook** | Auto-detects ADP projects (via `.adp-project` file or `pyproject.toml` dependency), exports `ADP_PROJECT` env var, auto-initializes per-project session, enables metrics tracking |
 | **Permission allowlist** | Pre-configured `Bash(uv run adp:*)` rules to avoid confirmation prompts |
 
 ### Project detection
@@ -276,9 +276,10 @@ The hook looks for two markers in the working directory:
 1. A `.adp-project` file (content = project name, or empty = use directory name)
 2. `"adp"` in `pyproject.toml` dependencies
 
-When detected, the hook sets `ADP_PROJECT` and prints available commands.
-Metrics accumulate in `~/.adp/projects/<name>/` and can be visualized
-with `/adp-dashboard`.
+When detected, the hook sets `ADP_PROJECT`, auto-initializes the session
+file (`~/.adp/projects/<name>/lut_state.json`) if it doesn't exist, and
+prints available commands. Metrics accumulate from real encode/decode
+operations and can be visualized with `/adp-dashboard`.
 
 ### Manual setup (alternative)
 
