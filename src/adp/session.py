@@ -53,6 +53,7 @@ import json
 import os
 import re
 import tempfile
+import time
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -133,6 +134,7 @@ class ADPSession:
             "miss_count": 0,
             "evictions": 0,
         }
+        self._history: list[dict] = []
 
         self._cost_estimator: TokenizerCostEstimator | None = cost_estimator
 
@@ -188,6 +190,7 @@ class ADPSession:
         self._lru_order = list(data.get("lru_order", []))
         self._next_alias_id = int(data.get("next_alias_id", 0))
         self._stats.update(data.get("stats", {}))
+        self._history = list(data.get("history", []))
         self._inv = {v: k for k, v in self._entries.items()}
 
     def save(self) -> None:
@@ -200,6 +203,7 @@ class ADPSession:
             "lru_order": list(self._lru_order),
             "next_alias_id": self._next_alias_id,
             "stats": dict(self._stats),
+            "history": list(self._history),
         }
         # Atomic write: temp + rename in stessa directory
         fd, tmp_path_str = tempfile.mkstemp(
@@ -325,6 +329,7 @@ class ADPSession:
         - Altrimenti: usa dynamic LUT + diff (se enable_diff).
         - Aggiorna baseline state.
         """
+        _t0 = time.perf_counter()
         caps_prefix = self._build_caps_prefix()
 
         # Auto-degrade check
@@ -347,6 +352,7 @@ class ADPSession:
                 self._tpd_buffer.append(final_msg)
                 if self._caps_outbound_count % self._tpd_promote_every == 0:
                     self._run_tpd_promotion()
+            self._record_history("encode", final_msg, obj, _t0, False)
             return final_msg
 
         full_msg = self._encode_full_with_lut(obj)
@@ -370,6 +376,7 @@ class ADPSession:
             self._tpd_buffer.append(final_msg)
             if self._caps_outbound_count % self._tpd_promote_every == 0:
                 self._run_tpd_promotion()
+        self._record_history("encode", final_msg, obj, _t0, diff_msg is not None)
         return final_msg
 
     def _build_caps_prefix(self) -> str:
@@ -578,6 +585,7 @@ class ADPSession:
         4. Resto del payload — decode normale, aggiorna baseline received
         Espande infine alias dynamic LUT nel risultato.
         """
+        _t0 = time.perf_counter()
         rest = msg
         seen: set[str] = set()
         diff_base_id: str | None = None
@@ -635,7 +643,9 @@ class ADPSession:
             new_payload = apply_diff(self._last_received_payload, diff_dict)
             self._last_received_payload = new_payload
             self._last_received_base_id = self._compute_base_id(new_payload)
-            return self._expand(new_payload)
+            result = self._expand(new_payload)
+            self._record_history("decode", msg, result, _t0, False)
+            return result
 
         if diff_base_id is not None or diff_dict is not None:
             # _base senza _diff o viceversa: errore
@@ -650,6 +660,7 @@ class ADPSession:
         # Aggiorna baseline received
         self._last_received_payload = expanded
         self._last_received_base_id = self._compute_base_id(expanded)
+        self._record_history("decode", msg, expanded, _t0, False)
         return expanded
 
     def _match_reserved_prefix(self, s: str) -> tuple[str, str, int] | None:
@@ -809,6 +820,31 @@ class ADPSession:
             self._pending_announcements[alias] = phrase
         return added
 
+    def _record_history(self, direction: str, adp_msg: str, obj: Any,
+                        t0: float, used_diff: bool = False) -> None:
+        """Append a metrics entry to _history."""
+        elapsed = (time.perf_counter() - t0) * 1000
+        json_str = json.dumps(obj, ensure_ascii=False, separators=(",", ":"))
+        if self._cost_estimator is not None:
+            tokens_adp = self._cost_estimator.estimate(adp_msg)
+            tokens_json = self._cost_estimator.estimate(json_str)
+        else:
+            tokens_adp = max(1, len(adp_msg) // 4)
+            tokens_json = max(1, len(json_str) // 4)
+        self._history.append({
+            "direction": direction,
+            "ts": time.time(),
+            "tokens_adp": tokens_adp,
+            "tokens_json": tokens_json,
+            "bytes_adp": len(adp_msg.encode("utf-8")),
+            "bytes_json": len(json_str.encode("utf-8")),
+            "elapsed_ms": round(elapsed, 3),
+            "lut_entries": len(self._entries),
+            "lut_hits": self._stats["hit_count"],
+            "lut_misses": self._stats["miss_count"],
+            "used_diff": used_diff,
+        })
+
     def stats(self) -> dict:
         """Dict diagnostico."""
         return {
@@ -817,7 +853,13 @@ class ADPSession:
             "hit_count": self._stats["hit_count"],
             "miss_count": self._stats["miss_count"],
             "evictions": self._stats["evictions"],
+            "message_count": len(self._history),
         }
+
+    @property
+    def history(self) -> list[dict]:
+        """Per-message metrics history for dashboard."""
+        return list(self._history)
 
     @property
     def peer_caps(self) -> dict | None:
