@@ -264,26 +264,22 @@ uv run adp bench < tests/fixtures/example.json
 
 The core library has no runtime dependencies beyond the standard library.
 
-### Test results
+### Benchmark results — token savings @ 100 messages
 
-| Module | Tests | Status |
-|---|---:|---|
-| `test_roundtrip.py` | 49 | ✅ |
-| `test_session.py` | 35 | ✅ |
-| `test_diff.py` | 31 | ✅ |
-| `test_v02_features.py` | 26 | ✅ |
-| `test_cost.py` | 15 | ✅ |
-| `test_integrity.py` | 14 | ✅ |
-| `test_tpd_promotion.py` | 14 | ✅ |
-| `test_caps.py` | 13 | ✅ |
-| `test_tpd_db.py` | 12 | ✅ |
-| `test_warmup.py` | 12 | ✅ |
-| `test_lut.py` | 9 | ✅ |
-| `test_image.py` | 9 | ✅ |
-| `test_converters.py` | 5 | ✅ |
-| **Total** | **244** | **✅ all passing** |
+`ADPSession` full stack vs JSON-minified and TOON (best competitor).
+Tokenizer: `cl100k_base`.
 
-*Python 3.11, pytest 9.0, Linux — last run: 2026-05-25.*
+| Workload | JSON | TOON | ADP full | Δ vs JSON | Δ vs TOON |
+|---|---:|---:|---:|---:|---:|
+| status_polling | 7,523 | 8,503 | 3,308 | **−56.0%** | **−61.1%** |
+| tool_use | 4,246 | 4,154 | 3,519 | −17.1% | −15.3% |
+| long_narrative | 7,748 | 7,448 | 7,348 | −5.2% | −1.3% |
+| etl_pipeline | 116,647 | 144,647 | 57,583 | **−50.6%** | **−60.2%** |
+| multi_agent_broadcast | 4,600 | 4,520 | 4,009 | −12.8% | −11.3% |
+| db_query_response | 29,565 | 20,215 | 16,420 | **−44.5%** | −18.8% |
+| mixed | 24,519 | 27,939 | 14,012 | **−42.9%** | **−49.8%** |
+
+Full results across 4 session lengths: [docs/benchmarks.md](docs/benchmarks.md).
 
 ## Roadmap
 
