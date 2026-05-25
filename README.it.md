@@ -797,16 +797,44 @@ sessione: ADP diventa una scelta economicamente significativa.
 ### Plugin pronto (raccomandato)
 
 Il repository contiene `claude-plugin/`, un plugin Claude Code completo
-con skill, subagent `adp-agent`, nove slash command, hook contestuale e
-script di installazione. Setup in una riga:
+con skill, subagent `adp-agent`, dieci slash command, hook contestuale e
+script di installazione cross-platform.
+
+**Installazione** (Linux, macOS, Windows):
 
 ```bash
-bash /path/to/agent-data-protocol/claude-plugin/install.sh
-# Riavvia Claude Code: /adp-encode, /adp-decode, /adp-bench, ... attivi
+python3 claude-plugin/install.py
 ```
 
-Vedi [`claude-plugin/README.md`](claude-plugin/README.md) per dettagli,
-disinstallazione e personalizzazioni.
+Su Linux/macOS funziona anche il wrapper bash:
+
+```bash
+bash claude-plugin/install.sh
+```
+
+Riavvia Claude Code dopo l'installazione. Il plugin si auto-ripara: se
+il link nella cache viene perso (es. dopo una pulizia della cache
+plugin), l'hook SessionStart lo ricrea automaticamente al prossimo avvio
+di sessione.
+
+**Disinstallazione:**
+
+```bash
+python3 claude-plugin/uninstall.py
+```
+
+**Cosa include:**
+
+| Funzionalità | Descrizione |
+|---|---|
+| **Slash command** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt`, `/adp-dashboard` |
+| **Subagent** | `adp-agent` — risponde in formato ADP, utile per estrazioni strutturate |
+| **Skill** | `adp` — insegna a Claude quando e come usare ADP nella comunicazione tra agenti |
+| **Hook SessionStart** | Rileva automaticamente i progetti ADP (via file `.adp-project` o dipendenza in `pyproject.toml`), esporta `ADP_PROJECT`, abilita le metriche per progetto |
+| **Allowlist permessi** | Regole `Bash(uv run adp:*)` pre-configurate per evitare conferme manuali |
+
+Vedi [`claude-plugin/README.md`](claude-plugin/README.md) per dettagli
+e personalizzazioni.
 
 ### Setup manuale (alternativa)
 

@@ -33,12 +33,13 @@ See [docs/dynamic-lut.md](docs/dynamic-lut.md) and [docs/benchmarks.md](docs/ben
 5. [Syntax cheat sheet](#syntax-cheat-sheet)
 6. [Converters](#converters)
 7. [AI agent integration](#ai-agent-integration)
-8. [Dashboard](#dashboard)
-9. [Project structure](#project-structure)
-10. [Development and testing](#development-and-testing)
-11. [Roadmap](#roadmap)
-12. [Documentation](#documentation)
-13. [License](#license)
+8. [Claude Code plugin](#claude-code-plugin)
+9. [Dashboard](#dashboard)
+10. [Project structure](#project-structure)
+11. [Development and testing](#development-and-testing)
+12. [Roadmap](#roadmap)
+13. [Documentation](#documentation)
+14. [License](#license)
 
 ---
 
@@ -227,6 +228,65 @@ obj = session.decode(msg)
 Full reference: [docs/dynamic-lut.md](docs/dynamic-lut.md).
 
 > **Note:** dynamic LUT aliases use the reserved `_N` pattern (underscore + digits). Payload keys or values matching `_\d+` (e.g. `{"_0": "literal"}`) will raise `ADPLUTSyncError` on decode.
+
+## Claude Code plugin
+
+ADP ships with a ready-made Claude Code plugin that provides automatic
+project detection, nine slash commands, a dedicated subagent, and a
+SessionStart hook for metrics tracking.
+
+### Installation
+
+Cross-platform (Linux, macOS, Windows):
+
+```bash
+python3 claude-plugin/install.py
+```
+
+On Linux/macOS the convenience wrapper also works:
+
+```bash
+bash claude-plugin/install.sh
+```
+
+Restart Claude Code after installation. The plugin self-heals: if the
+cache link is lost (e.g. after a plugin cache cleanup), the SessionStart
+hook recreates it automatically on the next session start.
+
+### Uninstallation
+
+```bash
+python3 claude-plugin/uninstall.py
+```
+
+### What you get
+
+| Feature | Description |
+|---|---|
+| **Slash commands** | `/adp-encode`, `/adp-decode`, `/adp-to-md`, `/adp-to-html`, `/adp-bench`, `/adp-sign`, `/adp-verify`, `/adp-serve`, `/adp-prompt`, `/adp-dashboard` |
+| **Subagent** | `adp-agent` — responds in ADP format, useful for structured extractions |
+| **Skill** | `adp` — teaches Claude when and how to use ADP in agent communication |
+| **SessionStart hook** | Auto-detects ADP projects (via `.adp-project` file or `pyproject.toml` dependency), exports `ADP_PROJECT` env var, enables per-project metrics |
+| **Permission allowlist** | Pre-configured `Bash(uv run adp:*)` rules to avoid confirmation prompts |
+
+### Project detection
+
+The hook looks for two markers in the working directory:
+
+1. A `.adp-project` file (content = project name, or empty = use directory name)
+2. `"adp"` in `pyproject.toml` dependencies
+
+When detected, the hook sets `ADP_PROJECT` and prints available commands.
+Metrics accumulate in `~/.adp/projects/<name>/` and can be visualized
+with `/adp-dashboard`.
+
+### Manual setup (alternative)
+
+If you prefer to configure without the packaged plugin, six integration
+modes are available — from simplest to most powerful. See
+[docs/claude-code.md](docs/claude-code.md) for detailed instructions
+covering CLAUDE.md snippets, custom slash commands, subagent setup, MCP
+server, SessionStart hooks, and permission allowlists.
 
 ## Dashboard
 
